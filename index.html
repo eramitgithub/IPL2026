@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IPL 2026 · Group Betting</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0e1a;--bg2:#111827;--bg3:#1a2235;--bg4:#212d42;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
+  --text:#f0f4ff;--text2:#8a9bb8;--text3:#4a5a78;
+  --accent:#f97316;--accent2:#fb923c;
+  --blue:#3b82f6;--blue2:#60a5fa;
+  --green:#22c55e;--green2:#4ade80;
+  --red:#ef4444;--red2:#f87171;
+  --gold:#f59e0b;--silver:#94a3b8;--bronze:#b45309;
+  --radius:12px;--radius-sm:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px}
+
+.header{background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%);border-bottom:1px solid rgba(249,115,22,0.3);padding:0 16px;position:sticky;top:0;z-index:100}
+.header-inner{max-width:720px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:56px}
+.logo{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--accent);letter-spacing:1px}
+.logo span{color:var(--text)}
+.header-right{display:flex;align-items:center;gap:10px}
+.pool-pill{background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.3);border-radius:20px;padding:4px 14px;font-size:13px;color:var(--accent2);font-weight:500}
+.pool-pill strong{color:var(--accent);font-family:'Rajdhani',sans-serif;font-size:16px}
+.admin-badge{background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--green2);font-weight:600;cursor:pointer;display:none;align-items:center;gap:4px}
+.admin-badge.show{display:flex}
+
+.sync-bar{background:rgba(59,130,246,0.08);border-bottom:1px solid rgba(59,130,246,0.15);padding:6px 16px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--text2)}
+.sync-bar.error{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);color:var(--red2)}
+.sync-bar.ok{background:rgba(34,197,94,0.08);border-color:rgba(34,197,94,0.2);color:var(--green2)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+.dot.pulse{animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+
+.tabs{background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs-inner{max-width:720px;margin:0 auto;display:flex}
+.tab{padding:14px 18px;font-size:13px;font-weight:500;color:var(--text2);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all 0.2s;letter-spacing:0.3px}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.main{max-width:720px;margin:0 auto;padding:16px}
+.section{display:none}.section.active{display:block}
+
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.match-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;transition:border-color 0.2s}
+.match-card:hover{border-color:var(--border2)}
+.match-card.today{border-color:rgba(249,115,22,0.4);background:linear-gradient(135deg,var(--bg2) 0%,rgba(249,115,22,0.04) 100%)}
+.match-card.done{opacity:0.8}
+
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;letter-spacing:0.5px;text-transform:uppercase}
+.badge-live{background:rgba(239,68,68,0.15);color:var(--red2);border:1px solid rgba(239,68,68,0.3)}
+.badge-upcoming{background:rgba(59,130,246,0.1);color:var(--blue2);border:1px solid rgba(59,130,246,0.2)}
+.badge-done{background:rgba(138,155,184,0.1);color:var(--text2);border:1px solid var(--border)}
+.badge-pending{background:rgba(245,158,11,0.1);color:#fbbf24;border:1px solid rgba(245,158,11,0.3)}
+
+.teams-row{display:flex;align-items:center;gap:12px;margin:10px 0 6px}
+.team-name{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;letter-spacing:0.5px}
+.vs-text{font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:1px}
+.team-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.match-meta{font-size:12px;color:var(--text2)}
+.match-venue{font-size:11px;color:var(--text3);margin-top:2px}
+
+.bet-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.chip{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px}
+.chip-win{background:rgba(34,197,94,0.12);color:var(--green2);border:1px solid rgba(34,197,94,0.25)}
+.chip-loss{background:rgba(239,68,68,0.1);color:var(--red2);border:1px solid rgba(239,68,68,0.2)}
+.chip-bet{background:rgba(59,130,246,0.1);color:var(--blue2);border:1px solid rgba(59,130,246,0.2)}
+.chip-nobet{background:rgba(245,158,11,0.08);color:#fbbf24;border:1px solid rgba(245,158,11,0.2)}
+.winner-banner{display:inline-flex;align-items:center;gap:5px;background:rgba(34,197,94,0.1);color:var(--green2);border:1px solid rgba(34,197,94,0.25);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:600;margin-top:6px}
+
+.action-row{display:flex;gap:8px;flex-shrink:0}
+.locked-icon{font-size:18px;color:var(--text3);padding:4px;cursor:default}
+
+.btn{padding:8px 18px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s;border:none;font-family:'DM Sans',sans-serif}
+.btn-primary{background:var(--accent);color:white}
+.btn-primary:hover{background:var(--accent2)}
+.btn-outline{background:transparent;border:1px solid var(--border2);color:var(--text2)}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent);background:rgba(249,115,22,0.05)}
+.btn-blue{background:rgba(59,130,246,0.15);color:var(--blue2);border:1px solid rgba(59,130,246,0.3)}
+.btn-blue:hover{background:rgba(59,130,246,0.25)}
+.btn-red{background:rgba(239,68,68,0.1);color:var(--red2);border:1px solid rgba(239,68,68,0.25)}
+.btn-red:hover{background:rgba(239,68,68,0.2)}
+.btn-green{background:rgba(34,197,94,0.12);color:var(--green2);border:1px solid rgba(34,197,94,0.25)}
+.btn-green:hover{background:rgba(34,197,94,0.22)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn:disabled{opacity:0.4;cursor:not-allowed}
+
+.lb-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+.lb-row:last-child{border-bottom:none}
+.rank-badge{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;font-family:'Rajdhani',sans-serif}
+.r1{background:rgba(245,158,11,0.2);color:var(--gold);border:1px solid rgba(245,158,11,0.4)}
+.r2{background:rgba(148,163,184,0.15);color:var(--silver);border:1px solid rgba(148,163,184,0.3)}
+.r3{background:rgba(180,83,9,0.15);color:#cd7c3a;border:1px solid rgba(180,83,9,0.3)}
+.rn{background:var(--bg3);color:var(--text3);border:1px solid var(--border)}
+.avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0;font-family:'Rajdhani',sans-serif;letter-spacing:0.5px}
+.net-pos{color:var(--green2);font-weight:600;font-family:'Rajdhani',sans-serif;font-size:16px}
+.net-neg{color:var(--red2);font-weight:600;font-family:'Rajdhani',sans-serif;font-size:16px}
+.net-zero{color:var(--text2);font-family:'Rajdhani',sans-serif;font-size:16px}
+
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.stat-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center}
+.stat-val{font-family:'Rajdhani',sans-serif;font-size:26px;font-weight:700;color:var(--text)}
+.stat-val.accent{color:var(--accent)}
+.stat-label{font-size:11px;color:var(--text3);margin-top:2px;text-transform:uppercase;letter-spacing:0.5px}
+
+.input{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:10px 14px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;transition:border-color 0.2s}
+.input:focus{outline:none;border-color:var(--accent)}
+.input::placeholder{color:var(--text3)}
+select.input{cursor:pointer}
+
+/* PIN dots */
+.pin-dots{display:flex;gap:14px;justify-content:center;margin:20px 0}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);background:transparent;transition:all 0.2s}
+.pin-dot.filled{background:var(--accent);border-color:var(--accent)}
+.pin-dot.shake{animation:shake 0.4s}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:240px;margin:0 auto}
+.pin-key{padding:16px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:18px;font-family:'Rajdhani',sans-serif;font-weight:600;cursor:pointer;text-align:center;transition:all 0.15s}
+.pin-key:hover{border-color:var(--accent);color:var(--accent);background:rgba(249,115,22,0.06)}
+.pin-key:active{transform:scale(0.95)}
+.pin-key.del{color:var(--text2);font-size:14px}
+
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:200;align-items:center;justify-content:center;padding:16px}
+.modal-bg.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:24px;width:100%;max-width:380px;max-height:90vh;overflow-y:auto}
+.modal-title{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;margin-bottom:4px;color:var(--text)}
+.modal-sub{font-size:12px;color:var(--text2);margin-bottom:20px}
+.label{font-size:12px;color:var(--text2);margin-bottom:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.4px}
+
+.team-pick-row{display:flex;gap:8px;margin-bottom:18px}
+.team-pick{flex:1;padding:14px 8px;border:1.5px solid var(--border2);border-radius:var(--radius-sm);background:var(--bg3);color:var(--text);cursor:pointer;text-align:center;font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;transition:all 0.15s;letter-spacing:0.5px}
+.team-pick:hover{border-color:var(--accent);background:rgba(249,115,22,0.05)}
+.team-pick.selected{border-color:var(--accent);background:rgba(249,115,22,0.1);color:var(--accent)}
+.team-pick .sub{font-family:'DM Sans',sans-serif;font-size:10px;color:var(--text3);font-weight:400;margin-top:2px;display:block;letter-spacing:0}
+.team-pick.selected .sub{color:var(--accent2)}
+
+.amt-row{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.amt-btn{width:38px;height:38px;border-radius:50%;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;flex-shrink:0}
+.amt-btn:hover{border-color:var(--accent);color:var(--accent)}
+.amt-val{font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--accent);flex:1;text-align:center}
+
+.shootout-card{background:linear-gradient(135deg,rgba(34,197,94,0.06) 0%,var(--bg2) 100%);border:1px solid rgba(34,197,94,0.2);border-radius:var(--radius);padding:16px;margin-bottom:10px}
+.shootout-match{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;color:var(--green2)}
+.shootout-winner{font-size:12px;color:var(--text2);margin:4px 0 10px}
+
+.section-header{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin:20px 0 10px}
+.notif{background:linear-gradient(135deg,rgba(249,115,22,0.1) 0%,rgba(251,146,60,0.05) 100%);border:1px solid rgba(249,115,22,0.3);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--accent2);display:flex;align-items:center;gap:8px}
+
+/* Setup screen */
+.setup-screen{display:none;position:fixed;inset:0;background:var(--bg);z-index:300;align-items:center;justify-content:center;padding:24px}
+.setup-screen.open{display:flex}
+.setup-box{background:var(--bg2);border:1px solid var(--border2);border-radius:20px;padding:32px 28px;width:100%;max-width:420px}
+.setup-logo{font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;color:var(--accent);text-align:center;margin-bottom:4px}
+.setup-sub{text-align:center;color:var(--text2);font-size:13px;margin-bottom:28px}
+
+/* PIN modal */
+.pin-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:250;align-items:center;justify-content:center;padding:16px}
+.pin-modal.open{display:flex}
+.pin-box{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:28px 24px;width:100%;max-width:300px;text-align:center}
+.pin-title{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;margin-bottom:4px;color:var(--text)}
+.pin-sub{font-size:12px;color:var(--text2);margin-bottom:4px}
+.pin-error{font-size:12px;color:var(--red2);margin-bottom:4px;height:16px}
+
+.empty{text-align:center;padding:48px 24px;color:var(--text3);font-size:14px}
+.empty-icon{font-size:40px;margin-bottom:12px}
+
+.admin-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border)}
+.admin-row:last-child{border-bottom:none}
+.admin-label{font-size:14px;color:var(--text)}
+.admin-desc{font-size:12px;color:var(--text3);margin-top:2px}
+
+.locked-notice{background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:var(--radius-sm);padding:12px 16px;display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:13px;color:var(--text2)}
+
+.fb-step{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.fb-step:last-child{border-bottom:none}
+.fb-step-num{width:22px;height:22px;border-radius:50%;background:rgba(249,115,22,0.15);color:var(--accent);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.fb-step-text{font-size:13px;color:var(--text2);line-height:1.5}
+.fb-step-text strong{color:var(--text)}
+.code-pill{background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:1px 6px;font-size:11px;color:var(--accent2);font-family:monospace}
+
+@media(max-width:480px){.stats-grid{gap:8px}.stat-val{font-size:22px}.team-name{font-size:17px}.modal{padding:20px 16px}}
+</style>
+</head>
+<body>
+
+<!-- ── FIREBASE SETUP ── -->
+<div class="setup-screen" id="setup-screen">
+  <div class="setup-box">
+    <div class="setup-logo">🏏 IPL 2026</div>
+    <div class="setup-sub">Group Betting · One-time setup</div>
+    <div style="margin-bottom:20px">
+      <div class="label">Firebase Database URL</div>
+      <input class="input" id="setup-db-url" placeholder="https://your-project-default-rtdb.firebaseio.com"/>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">Paste your Firebase Realtime Database URL</div>
+    </div>
+    <div style="margin-bottom:20px">
+      <div class="label">Group Name (optional)</div>
+      <input class="input" id="setup-group-name" placeholder="e.g. Nutrabay IPL Bets" value="IPL 2026 Bets"/>
+    </div>
+    <button class="btn btn-primary" style="width:100%;padding:12px" onclick="saveSetup()">Start →</button>
+    <div style="margin-top:12px;text-align:center">
+      <button class="btn btn-outline btn-sm" onclick="useDemo()">Try demo mode (data not shared)</button>
+    </div>
+    <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;font-weight:500">Get Firebase URL free (2 min):</div>
+      <div>
+        <div class="fb-step"><div class="fb-step-num">1</div><div class="fb-step-text">Go to <strong>console.firebase.google.com</strong> → Create project</div></div>
+        <div class="fb-step"><div class="fb-step-num">2</div><div class="fb-step-text">Sidebar → <strong>Realtime Database</strong> → Create → <strong>Test mode</strong></div></div>
+        <div class="fb-step"><div class="fb-step-num">3</div><div class="fb-step-text">Copy URL like <span class="code-pill">https://xxx-rtdb.firebaseio.com</span> and paste above</div></div>
+        <div class="fb-step"><div class="fb-step-num">4</div><div class="fb-step-text">Everyone uses the same URL — all data syncs in real time</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── PIN MODAL ── -->
+<div class="pin-modal" id="pin-modal">
+  <div class="pin-box">
+    <div class="pin-title">Admin Access</div>
+    <div class="pin-sub">Enter your 4-digit PIN</div>
+    <div class="pin-error" id="pin-error"></div>
+    <div class="pin-dots" id="pin-dots">
+      <div class="pin-dot" id="pd0"></div>
+      <div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div>
+      <div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-pad">
+      <button class="pin-key" onclick="pinKey('1')">1</button>
+      <button class="pin-key" onclick="pinKey('2')">2</button>
+      <button class="pin-key" onclick="pinKey('3')">3</button>
+      <button class="pin-key" onclick="pinKey('4')">4</button>
+      <button class="pin-key" onclick="pinKey('5')">5</button>
+      <button class="pin-key" onclick="pinKey('6')">6</button>
+      <button class="pin-key" onclick="pinKey('7')">7</button>
+      <button class="pin-key" onclick="pinKey('8')">8</button>
+      <button class="pin-key" onclick="pinKey('9')">9</button>
+      <button class="pin-key del" onclick="pinCancel()">Cancel</button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
+      <button class="pin-key del" onclick="pinDel()">⌫</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── HEADER ── -->
+<div class="header">
+  <div class="header-inner">
+    <div class="logo">IPL<span>2026</span> <span style="font-size:13px;color:var(--text3);font-weight:400;font-family:'DM Sans',sans-serif" id="group-name-display"></span></div>
+    <div class="header-right">
+      <div class="pool-pill">Pool <strong id="hdr-pool">₹0</strong></div>
+      <div class="admin-badge" id="admin-badge" onclick="logoutAdmin()">🔑 Admin <span style="opacity:0.6;font-size:10px">(tap to lock)</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SYNC BAR ── -->
+<div class="sync-bar" id="sync-bar">
+  <span class="dot pulse" id="sync-dot"></span>
+  <span id="sync-msg">Connecting...</span>
+  <button onclick="syncNow()" style="background:none;border:none;color:inherit;cursor:pointer;font-size:11px;opacity:0.7;padding:0">↺ Refresh</button>
+</div>
+
+<!-- ── TABS ── -->
+<div class="tabs">
+  <div class="tabs-inner">
+    <button class="tab active" onclick="switchTab('matches')">Matches</button>
+    <button class="tab" onclick="switchTab('leaderboard')">Leaderboard</button>
+    <button class="tab" onclick="switchTab('players')">Players</button>
+    <button class="tab" onclick="switchTab('shootouts')">Shootouts</button>
+    <button class="tab" onclick="switchTab('admin')">Admin</button>
+  </div>
+</div>
+
+<!-- ── CONTENT ── -->
+<div class="main">
+  <div id="tab-matches" class="section active"></div>
+  <div id="tab-leaderboard" class="section"></div>
+  <div id="tab-players" class="section"></div>
+  <div id="tab-shootouts" class="section"></div>
+  <div id="tab-admin" class="section"></div>
+</div>
+
+<!-- ── BET MODAL ── -->
+<div class="modal-bg" id="bet-modal">
+  <div class="modal">
+    <div class="modal-title" id="bm-title">Place your bet</div>
+    <div class="modal-sub" id="bm-sub"></div>
+    <div class="label">Your name</div>
+    <select class="input" id="bm-player" style="margin-bottom:18px"></select>
+    <div class="label">Pick your team</div>
+    <div class="team-pick-row">
+      <div class="team-pick" id="bm-t1" onclick="selTeam(0)">
+        <span id="bm-t1-name">-</span>
+        <span class="sub" id="bm-t1-full"></span>
+      </div>
+      <div class="team-pick" id="bm-t2" onclick="selTeam(1)">
+        <span id="bm-t2-name">-</span>
+        <span class="sub" id="bm-t2-full"></span>
+      </div>
+    </div>
+    <div class="label">Bet amount</div>
+    <div class="amt-row">
+      <button class="amt-btn" onclick="chgAmt(-10)">−</button>
+      <div class="amt-val" id="bm-amt">₹10</div>
+      <button class="amt-btn" onclick="chgAmt(10)">+</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:20px">Minimum ₹10 · multiples of ₹10</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="submitBet()">Confirm Bet</button>
+      <button class="btn btn-outline" onclick="closeBetModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── RESULT MODAL ── -->
+<div class="modal-bg" id="result-modal">
+  <div class="modal">
+    <div class="modal-title">Declare Result</div>
+    <div class="modal-sub" id="rm-sub"></div>
+    <div class="label">Who won?</div>
+    <div class="team-pick-row" style="margin-bottom:20px">
+      <div class="team-pick" id="rm-t1" onclick="selWinner(0)"><span id="rm-t1-name">-</span></div>
+      <div class="team-pick" id="rm-t2" onclick="selWinner(1)"><span id="rm-t2-name">-</span></div>
+    </div>
+    <div style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:20px;font-size:12px;color:var(--text2)">
+      This will calculate P&L for all players and publish the shootout.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="submitResult()">Declare Winner</button>
+      <button class="btn btn-outline" onclick="closeResultModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──
+const ADMIN_PIN = '2026'; // ← Your PIN
+
+const TEAM_COLORS = {RCB:'#dc2626',CSK:'#d97706',MI:'#2563eb',KKR:'#7c3aed',RR:'#db2777',GT:'#059669',DC:'#0ea5e9',SRH:'#ea580c',LSG:'#65a30d',PBKS:'#e11d48'};
+const TEAM_FULL = {RCB:'Royal Challengers Bengaluru',CSK:'Chennai Super Kings',MI:'Mumbai Indians',KKR:'Kolkata Knight Riders',RR:'Rajasthan Royals',GT:'Gujarat Titans',DC:'Delhi Capitals',SRH:'Sunrisers Hyderabad',LSG:'Lucknow Super Giants',PBKS:'Punjab Kings'};
+const COLORS = ['#dc2626','#2563eb','#059669','#7c3aed','#d97706','#db2777','#0ea5e9','#65a30d','#ea580c','#6366f1'];
+
+const MATCHES = [
+  {id:1,t1:'RCB',t2:'SRH',date:'2026-03-28',day:'Sat',time:'7:30 PM',venue:'M. Chinnaswamy Stadium, Bengaluru'},
+  {id:2,t1:'MI',t2:'KKR',date:'2026-03-29',day:'Sun',time:'7:30 PM',venue:'Wankhede Stadium, Mumbai'},
+  {id:3,t1:'CSK',t2:'RR',date:'2026-03-30',day:'Mon',time:'7:30 PM',venue:'MA Chidambaram Stadium, Chennai'},
+  {id:4,t1:'GT',t2:'PBKS',date:'2026-03-31',day:'Tue',time:'7:30 PM',venue:'Narendra Modi Stadium, Ahmedabad'},
+  {id:5,t1:'LSG',t2:'DC',date:'2026-04-01',day:'Wed',time:'7:30 PM',venue:'Ekana Cricket Stadium, Lucknow'},
+  {id:6,t1:'SRH',t2:'KKR',date:'2026-04-02',day:'Thu',time:'7:30 PM',venue:'Rajiv Gandhi Intl. Stadium, Hyderabad'},
+  {id:7,t1:'CSK',t2:'PBKS',date:'2026-04-03',day:'Fri',time:'7:30 PM',venue:'MA Chidambaram Stadium, Chennai'},
+  {id:8,t1:'DC',t2:'MI',date:'2026-04-04',day:'Sat',time:'3:30 PM',venue:'Arun Jaitley Stadium, Delhi'},
+  {id:9,t1:'GT',t2:'RR',date:'2026-04-04',day:'Sat',time:'7:30 PM',venue:'Narendra Modi Stadium, Ahmedabad'},
+  {id:10,t1:'SRH',t2:'LSG',date:'2026-04-05',day:'Sun',time:'3:30 PM',venue:'Rajiv Gandhi Intl. Stadium, Hyderabad'},
+  {id:11,t1:'RCB',t2:'CSK',date:'2026-04-05',day:'Sun',time:'7:30 PM',venue:'M. Chinnaswamy Stadium, Bengaluru'},
+  {id:12,t1:'KKR',t2:'PBKS',date:'2026-04-06',day:'Mon',time:'7:30 PM',venue:'Eden Gardens, Kolkata'},
+  {id:13,t1:'RR',t2:'MI',date:'2026-04-07',day:'Tue',time:'7:30 PM',venue:'Sawai Mansingh Stadium, Jaipur'},
+  {id:14,t1:'DC',t2:'GT',date:'2026-04-08',day:'Wed',time:'7:30 PM',venue:'Arun Jaitley Stadium, Delhi'},
+  {id:15,t1:'KKR',t2:'LSG',date:'2026-04-09',day:'Thu',time:'7:30 PM',venue:'Eden Gardens, Kolkata'},
+  {id:16,t1:'RR',t2:'RCB',date:'2026-04-10',day:'Fri',time:'7:30 PM',venue:'Sawai Mansingh Stadium, Jaipur'},
+  {id:17,t1:'PBKS',t2:'SRH',date:'2026-04-11',day:'Sat',time:'3:30 PM',venue:'HPCA Stadium, Dharamsala'},
+  {id:18,t1:'CSK',t2:'DC',date:'2026-04-11',day:'Sat',time:'7:30 PM',venue:'MA Chidambaram Stadium, Chennai'},
+  {id:19,t1:'LSG',t2:'GT',date:'2026-04-12',day:'Sun',time:'3:30 PM',venue:'Ekana Cricket Stadium, Lucknow'},
+  {id:20,t1:'MI',t2:'RCB',date:'2026-04-12',day:'Sun',time:'7:30 PM',venue:'Wankhede Stadium, Mumbai'},
+  {id:21,t1:'SRH',t2:'RR',date:'2026-04-13',day:'Mon',time:'7:30 PM',venue:'Rajiv Gandhi Intl. Stadium, Hyderabad'},
+  {id:22,t1:'CSK',t2:'KKR',date:'2026-04-14',day:'Tue',time:'7:30 PM',venue:'MA Chidambaram Stadium, Chennai'},
+  {id:23,t1:'RCB',t2:'LSG',date:'2026-04-15',day:'Wed',time:'7:30 PM',venue:'M. Chinnaswamy Stadium, Bengaluru'},
+  {id:24,t1:'MI',t2:'PBKS',date:'2026-04-16',day:'Thu',time:'7:30 PM',venue:'Wankhede Stadium, Mumbai'},
+  {id:25,t1:'GT',t2:'KKR',date:'2026-04-17',day:'Fri',time:'7:30 PM',venue:'Narendra Modi Stadium, Ahmedabad'},
+  {id:26,t1:'RCB',t2:'DC',date:'2026-04-18',day:'Sat',time:'3:30 PM',venue:'M. Chinnaswamy Stadium, Bengaluru'},
+  {id:27,t1:'SRH',t2:'CSK',date:'2026-04-18',day:'Sat',time:'7:30 PM',venue:'Rajiv Gandhi Intl. Stadium, Hyderabad'},
+  {id:28,t1:'KKR',t2:'RR',date:'2026-04-19',day:'Sun',time:'3:30 PM',venue:'Eden Gardens, Kolkata'},
+  {id:29,t1:'PBKS',t2:'LSG',date:'2026-04-19',day:'Sun',time:'7:30 PM',venue:'HPCA Stadium, Dharamsala'},
+  {id:30,t1:'GT',t2:'MI',date:'2026-04-20',day:'Mon',time:'7:30 PM',venue:'Narendra Modi Stadium, Ahmedabad'},
+  {id:31,t1:'SRH',t2:'DC',date:'2026-04-21',day:'Tue',time:'7:30 PM',venue:'Rajiv Gandhi Intl. Stadium, Hyderabad'},
+  {id:32,t1:'LSG',t2:'RR',date:'2026-04-22',day:'Wed',time:'7:30 PM',venue:'Ekana Cricket Stadium, Lucknow'},
+  {id:33,t1:'MI',t2:'CSK',date:'2026-04-23',day:'Thu',time:'7:30 PM',venue:'Wankhede Stadium, Mumbai'},
+  {id:34,t1:'RCB',t2:'GT',date:'2026-04-24',day:'Fri',time:'7:30 PM',venue:'M. Chinnaswamy Stadium, Bengaluru'},
+  {id:35,t1:'DC',t2:'PBKS',date:'2026-04-25',day:'Sat',time:'3:30 PM',venue:'Arun Jaitley Stadium, Delhi'},
+  {id:36,t1:'RR',t2:'SRH',date:'2026-04-25',day:'Sat',time:'7:30 PM',venue:'Sawai Mansingh Stadium, Jaipur'},
+  {id:37,t1:'GT',t2:'CSK',date:'2026-04-26',day:'Sun',time:'3:30 PM',venue:'Narendra Modi Stadium, Ahmedabad'},
+  {id:38,t1:'LSG',t2:'KKR',date:'2026-04-26',day:'Sun',time:'7:30 PM',venue:'Ekana Cricket Stadium, Lucknow'},
+  {id:39,t1:'DC',t2:'RCB',date:'2026-04-27',day:'Mon',time:'7:30 PM',venue:'Arun Jaitley Stadium, Delhi'},
+  {id:40,t1:'PBKS',t2:'RR',date:'2026-04-28',day:'Tue',time:'7:30 PM',venue:'HPCA Stadium, Dharamsala'},
+  {id:41,t1:'MI',t2:'SRH',date:'2026-04-29',day:'Wed',time:'7:30 PM',venue:'Wankhede Stadium, Mumbai'},
+  {id:42,t1:'GT',t2:'RCB',date:'2026-04-30',day:'Thu',time:'7:30 PM',venue:'Narendra Modi Stadium, Ahmedabad'},
+  {id:43,t1:'RR',t2:'DC',date:'2026-05-01',day:'Fri',time:'7:30 PM',venue:'Sawai Mansingh Stadium, Jaipur'},
+  {id:44,t1:'CSK',t2:'LSG',date:'2026-05-02',day:'Sat',time:'3:30 PM',venue:'MA Chidambaram Stadium, Chennai'},
+  {id:45,t1:'KKR',t2:'MI',date:'2026-05-02',day:'Sat',time:'7:30 PM',venue:'Eden Gardens, Kolkata'},
+  {id:46,t1:'PBKS',t2:'GT',date:'2026-05-03',day:'Sun',time:'3:30 PM',venue:'HPCA Stadium, Dharamsala'},
+  {id:47,t1:'SRH',t2:'RCB',date:'2026-05-03',day:'Sun',time:'7:30 PM',venue:'Rajiv Gandhi Intl. Stadium, Hyderabad'},
+  {id:48,t1:'MI',t2:'RR',date:'2026-05-04',day:'Mon',time:'7:30 PM',venue:'Wankhede Stadium, Mumbai'},
+  {id:49,t1:'DC',t2:'KKR',date:'2026-05-05',day:'Tue',time:'7:30 PM',venue:'Arun Jaitley Stadium, Delhi'},
+  {id:50,t1:'CSK',t2:'GT',date:'2026-05-06',day:'Wed',time:'7:30 PM',venue:'MA Chidambaram Stadium, Chennai'},
+  {id:51,t1:'LSG',t2:'SRH',date:'2026-05-07',day:'Thu',time:'7:30 PM',venue:'Ekana Cricket Stadium, Lucknow'},
+  {id:52,t1:'PBKS',t2:'MI',date:'2026-05-08',day:'Fri',time:'7:30 PM',venue:'HPCA Stadium, Dharamsala'},
+  {id:53,t1:'RR',t2:'KKR',date:'2026-05-09',day:'Sat',time:'3:30 PM',venue:'Sawai Mansingh Stadium, Jaipur'},
+  {id:54,t1:'RCB',t2:'LSG',date:'2026-05-09',day:'Sat',time:'7:30 PM',venue:'M. Chinnaswamy Stadium, Bengaluru'},
+  {id:55,t1:'GT',t2:'DC',date:'2026-05-10',day:'Sun',time:'3:30 PM',venue:'Narendra Modi Stadium, Ahmedabad'},
+  {id:56,t1:'SRH',t2:'PBKS',date:'2026-05-10',day:'Sun',time:'7:30 PM',venue:'Rajiv Gandhi Intl. Stadium, Hyderabad'},
+  {id:57,t1:'MI',t2:'LSG',date:'2026-05-11',day:'Mon',time:'7:30 PM',venue:'Wankhede Stadium, Mumbai'},
+  {id:58,t1:'KKR',t2:'CSK',date:'2026-05-12',day:'Tue',time:'7:30 PM',venue:'Eden Gardens, Kolkata'},
+  {id:59,t1:'RCB',t2:'PBKS',date:'2026-05-13',day:'Wed',time:'7:30 PM',venue:'M. Chinnaswamy Stadium, Bengaluru'},
+  {id:60,t1:'DC',t2:'SRH',date:'2026-05-14',day:'Thu',time:'7:30 PM',venue:'Arun Jaitley Stadium, Delhi'},
+  {id:61,t1:'RR',t2:'GT',date:'2026-05-15',day:'Fri',time:'7:30 PM',venue:'Sawai Mansingh Stadium, Jaipur'},
+  {id:62,t1:'CSK',t2:'MI',date:'2026-05-16',day:'Sat',time:'3:30 PM',venue:'MA Chidambaram Stadium, Chennai'},
+  {id:63,t1:'KKR',t2:'RCB',date:'2026-05-16',day:'Sat',time:'7:30 PM',venue:'Eden Gardens, Kolkata'},
+  {id:64,t1:'LSG',t2:'PBKS',date:'2026-05-17',day:'Sun',time:'3:30 PM',venue:'Ekana Cricket Stadium, Lucknow'},
+  {id:65,t1:'GT',t2:'SRH',date:'2026-05-17',day:'Sun',time:'7:30 PM',venue:'Narendra Modi Stadium, Ahmedabad'},
+  {id:66,t1:'DC',t2:'RR',date:'2026-05-18',day:'Mon',time:'7:30 PM',venue:'Arun Jaitley Stadium, Delhi'},
+  {id:67,t1:'PBKS',t2:'KKR',date:'2026-05-19',day:'Tue',time:'7:30 PM',venue:'HPCA Stadium, Dharamsala'},
+  {id:68,t1:'MI',t2:'GT',date:'2026-05-20',day:'Wed',time:'7:30 PM',venue:'Wankhede Stadium, Mumbai'},
+  {id:69,t1:'LSG',t2:'CSK',date:'2026-05-21',day:'Thu',time:'7:30 PM',venue:'Ekana Cricket Stadium, Lucknow'},
+  {id:70,t1:'RCB',t2:'RR',date:'2026-05-22',day:'Fri',time:'7:30 PM',venue:'M. Chinnaswamy Stadium, Bengaluru'},
+];
+
+// ── STATE ──
+let state = {participants:[],bets:{},results:{},shootouts:[]};
+let dbUrl = '', demoMode = false, isAdmin = false;
+let activeBetMatch = null, selTeamIdx = null, betAmount = 10;
+let activeResultMatch = null, selWinnerIdx = null;
+let pinBuffer = '', pinCallback = null;
+
+// ── UTILS ──
+const todayStr = () => new Date().toISOString().split('T')[0];
+const initials = n => { const p=n.trim().split(' '); return (p[0][0]+(p[1]?p[1][0]:p[0][1]||'')).toUpperCase(); };
+const fmtDate = d => d.slice(5).split('-').reverse().join('/');
+function totalPool(){ return Object.values(state.bets).reduce((a,mb)=>a+Object.values(mb).reduce((b,bt)=>b+bt.amount,0),0); }
+function getStatus(m){ const t=todayStr(); if(state.results[m.id]) return 'done'; if(m.date===t) return 'live'; if(m.date<t) return 'pending'; return 'upcoming'; }
+
+// ── ADMIN / PIN ──
+function requireAdmin(cb) {
+  if (isAdmin) { cb(); return; }
+  pinBuffer = '';
+  pinCallback = cb;
+  document.getElementById('pin-error').textContent = '';
+  updatePinDots();
+  document.getElementById('pin-modal').classList.add('open');
+}
+
+function pinKey(k) {
+  if (pinBuffer.length >= 4) return;
+  pinBuffer += k;
+  updatePinDots();
+  if (pinBuffer.length === 4) {
+    setTimeout(() => {
+      if (pinBuffer === ADMIN_PIN) {
+        isAdmin = true;
+        document.getElementById('pin-modal').classList.remove('open');
+        document.getElementById('admin-badge').classList.add('show');
+        pinBuffer = '';
+        updatePinDots();
+        if (pinCallback) { pinCallback(); pinCallback = null; }
+      } else {
+        document.getElementById('pin-error').textContent = 'Wrong PIN. Try again.';
+        document.querySelectorAll('.pin-dot').forEach(d => { d.classList.add('shake'); setTimeout(()=>d.classList.remove('shake'),400); });
+        pinBuffer = '';
+        updatePinDots();
+      }
+    }, 100);
+  }
+}
+
+function pinDel() { pinBuffer = pinBuffer.slice(0,-1); updatePinDots(); document.getElementById('pin-error').textContent = ''; }
+function pinCancel() { pinBuffer=''; pinCallback=null; document.getElementById('pin-modal').classList.remove('open'); updatePinDots(); }
+function updatePinDots() { for(let i=0;i<4;i++) document.getElementById('pd'+i).className='pin-dot'+(i<pinBuffer.length?' filled':''); }
+function logoutAdmin() { if(!confirm('Lock admin access?')) return; isAdmin=false; document.getElementById('admin-badge').classList.remove('show'); renderAll(); }
+
+// ── FIREBASE ──
+async function fbGet(path){ if(demoMode) return null; const r=await fetch(`${dbUrl}/${path}.json`); if(!r.ok) throw new Error('GET failed'); return r.json(); }
+async function fbSet(path,data){ if(demoMode) return; const r=await fetch(`${dbUrl}/${path}.json`,{method:'PUT',body:JSON.stringify(data),headers:{'Content-Type':'application/json'}}); if(!r.ok) throw new Error('SET failed'); }
+
+async function loadFromFirebase() {
+  if(demoMode){ setSyncOk('Demo mode — data not shared'); return; }
+  try {
+    setSyncMsg('Syncing...');
+    const data = await fbGet('ipl2026');
+    if(data){ state.participants=data.participants||[]; state.bets=data.bets||{}; state.results=data.results||{}; state.shootouts=data.shootouts||[]; }
+    setSyncOk('Live · '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
+  } catch(e){ setSyncError('Sync failed — check Firebase URL'); }
+}
+
+async function saveToFirebase() {
+  if(demoMode) return;
+  try { await fbSet('ipl2026',{participants:state.participants,bets:state.bets,results:state.results,shootouts:state.shootouts}); setSyncOk('Saved · '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})); }
+  catch(e){ setSyncError('Save failed'); }
+}
+
+function setSyncMsg(m){ document.getElementById('sync-msg').textContent=m; document.getElementById('sync-bar').className='sync-bar'; document.getElementById('sync-dot').className='dot pulse'; }
+function setSyncOk(m){ document.getElementById('sync-msg').textContent=m; document.getElementById('sync-bar').className='sync-bar ok'; document.getElementById('sync-dot').className='dot'; }
+function setSyncError(m){ document.getElementById('sync-msg').textContent=m; document.getElementById('sync-bar').className='sync-bar error'; document.getElementById('sync-dot').className='dot'; }
+async function syncNow(){ await loadFromFirebase(); renderAll(); }
+
+// ── SETUP ──
+function saveSetup() {
+  const url=document.getElementById('setup-db-url').value.trim().replace(/\/$/,'');
+  const name=document.getElementById('setup-group-name').value.trim();
+  if(!url){ alert('Please enter your Firebase Database URL'); return; }
+  dbUrl=url; demoMode=false;
+  localStorage.setItem('ipl_fb_url',url); localStorage.setItem('ipl_group_name',name);
+  document.getElementById('setup-screen').classList.remove('open');
+  document.getElementById('group-name-display').textContent=name?'· '+name:'';
+  startApp();
+}
+function useDemo(){ demoMode=true; document.getElementById('setup-screen').classList.remove('open'); startApp(); }
+
+async function startApp() {
+  await loadFromFirebase(); renderAll();
+  setInterval(async()=>{ await loadFromFirebase(); renderAll(); },30000);
+}
+
+// ── LEADERBOARD ──
+function getLeaderboard() {
+  const scores={};
+  state.participants.forEach(p=>{ scores[p.id]={...p,wins:0,losses:0,total_bet:0,net:0}; });
+  MATCHES.forEach(m=>{
+    if(!state.results[m.id]) return;
+    const winner=state.results[m.id]; const mb=state.bets[m.id]||{};
+    const pool=Object.values(mb).reduce((a,b)=>a+b.amount,0);
+    const winnerTotal=Object.entries(mb).filter(([,b])=>b.team===winner).reduce((a,[,b])=>a+b.amount,0);
+    state.participants.forEach(p=>{
+      if(!scores[p.id]) return;
+      const bet=mb[p.id]; const amt=bet?bet.amount:10;
+      scores[p.id].total_bet+=amt;
+      if(!bet){ scores[p.id].net-=10; scores[p.id].losses++; return; }
+      if(bet.team===winner){ scores[p.id].net+=Math.round(winnerTotal>0?(bet.amount/winnerTotal)*pool-bet.amount:0); scores[p.id].wins++; }
+      else{ scores[p.id].net-=bet.amount; scores[p.id].losses++; }
+    });
+  });
+  return Object.values(scores).sort((a,b)=>b.net-a.net);
+}
+
+// ── RENDER ──
+function renderAll() {
+  document.getElementById('hdr-pool').textContent='₹'+totalPool();
+  const tabs=['matches','leaderboard','players','shootouts','admin'];
+  const active=document.querySelector('.tab.active');
+  const idx=Array.from(document.querySelectorAll('.tab')).indexOf(active);
+  renderTab(tabs[idx]||'matches');
+}
+
+function renderMatches() {
+  const el=document.getElementById('tab-matches');
+  const td=todayStr();
+  const todays=MATCHES.filter(m=>m.date===td);
+  const upcoming=MATCHES.filter(m=>m.date>td).slice(0,15);
+  const past=MATCHES.filter(m=>m.date<td||state.results[m.id]).reverse().slice(0,12);
+  let h='';
+  if(todays.length){ h+=`<div class="notif">🔔 Match day! Collect bets before 7 PM IST</div><div class="section-header">Today</div>`; todays.forEach(m=>{h+=matchCard(m);}); }
+  if(upcoming.length){ h+=`<div class="section-header">Upcoming</div>`; upcoming.forEach(m=>{h+=matchCard(m);}); }
+  if(past.length){ h+=`<div class="section-header">Recent results</div>`; past.forEach(m=>{h+=matchCard(m);}); }
+  if(!h) h=`<div class="empty"><div class="empty-icon">🏏</div>No matches to show</div>`;
+  el.innerHTML=h;
+}
+
+function matchCard(m) {
+  const st=getStatus(m); const mb=state.bets[m.id]||{};
+  const pool=Object.values(mb).reduce((a,b)=>a+b.amount,0); const result=state.results[m.id];
+  const t1c=TEAM_COLORS[m.t1]||'#888'; const t2c=TEAM_COLORS[m.t2]||'#888';
+  const badge=st==='live'?'<span class="badge badge-live"><span class="dot pulse" style="background:var(--red2)"></span> Live</span>':
+    st==='done'?'<span class="badge badge-done">✓ Done</span>':
+    st==='pending'?'<span class="badge badge-pending">⏳ Awaiting result</span>':
+    '<span class="badge badge-upcoming">Upcoming</span>';
+
+  let betsHtml='';
+  if(state.participants.length>0&&(st!=='upcoming'||Object.keys(mb).length>0)){
+    betsHtml='<div class="bet-chips">';
+    state.participants.forEach(p=>{
+      const b=mb[p.id];
+      if(b){ const won=result&&b.team===result; const lost=result&&b.team!==result;
+        betsHtml+=`<span class="chip ${won?'chip-win':lost?'chip-loss':'chip-bet'}">${won?'✓ ':lost?'✗ ':\'\'}${p.name.split(' ')[0]} → ${b.team} ₹${b.amount}</span>`;
+      } else if(st!=='upcoming') betsHtml+=`<span class="chip chip-nobet">${p.name.split(' ')[0]} · No Bet −₹10</span>`;
+    });
+    betsHtml+='</div>';
+  }
+
+  // Admin-gated actions
+  const canBet=(st==='upcoming'||st==='live')&&state.participants.length>0;
+  const canResult=st==='pending';
+  const actionBtns=canBet
+    ? `<button class="btn btn-blue btn-sm" onclick="openBetModal(${m.id})">+ Bet</button>`
+    : '';
+  const resultBtn=canResult
+    ? (isAdmin
+        ? `<button class="btn btn-outline btn-sm" onclick="openResultModal(${m.id})">Result</button>`
+        : `<span class="locked-icon" title="Admin only">🔒</span>`)
+    : '';
+
+  return `<div class="match-card ${st==='live'?'today':''} ${st==='done'?'done':''}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
+          ${badge}<span style="font-size:11px;color:var(--text3)">Match ${m.id}</span>
+          ${result?`<div class="winner-banner">🏆 ${result}</div>`:''}
+        </div>
+        <div class="teams-row">
+          <span class="team-dot" style="background:${t1c}"></span>
+          <span class="team-name" style="color:${t1c}">${m.t1}</span>
+          <span class="vs-text">vs</span>
+          <span class="team-dot" style="background:${t2c}"></span>
+          <span class="team-name" style="color:${t2c}">${m.t2}</span>
+        </div>
+        <div class="match-meta">${m.day} · ${fmtDate(m.date)} · ${m.time}</div>
+        <div class="match-venue">${m.venue}</div>
+        ${pool>0?`<div style="font-size:11px;color:var(--text3);margin-top:5px">Pool: ₹${pool} · ${Object.keys(mb).length} bet${Object.keys(mb).length!==1?'s':''}</div>`:''}
+      </div>
+      <div class="action-row">${actionBtns}${resultBtn}</div>
+    </div>
+    ${betsHtml}
+  </div>`;
+}
+
+function renderLeaderboard() {
+  const el=document.getElementById('tab-leaderboard');
+  const lb=getLeaderboard(); const done=MATCHES.filter(m=>state.results[m.id]).length;
+  let h=`<div class="stats-grid">
+    <div class="stat-card"><div class="stat-val">${done}</div><div class="stat-label">Matches done</div></div>
+    <div class="stat-card"><div class="stat-val accent">₹${totalPool()}</div><div class="stat-label">Total pool</div></div>
+    <div class="stat-card"><div class="stat-val">${state.participants.length}</div><div class="stat-label">Players</div></div>
+  </div>`;
+  if(!lb.length){ h+=`<div class="empty"><div class="empty-icon">🏆</div>Add players to see the leaderboard</div>`; el.innerHTML=h; return; }
+  h+='<div class="card" style="padding:12px 16px">';
+  lb.forEach((p,i)=>{
+    const rc=i===0?'r1':i===1?'r2':i===2?'r3':'rn';
+    const nc=p.net>0?'net-pos':p.net<0?'net-neg':'net-zero';
+    const ns=p.net>0?`+₹${p.net}`:p.net<0?`−₹${Math.abs(p.net)}`:'₹0';
+    h+=`<div class="lb-row">
+      <div class="rank-badge ${rc}">${i+1}</div>
+      <div class="avatar" style="background:${p.color}22;color:${p.color}">${p.initials}</div>
+      <div style="flex:1"><div style="font-size:14px;font-weight:500;color:var(--text)">${p.name}</div><div style="font-size:11px;color:var(--text3)">${p.wins}W · ${p.losses}L · Bet ₹${p.total_bet}</div></div>
+      <div class="${nc}">${ns}</div>
+    </div>`;
+  });
+  h+='</div>'; el.innerHTML=h;
+}
+
+function renderPlayers() {
+  const el=document.getElementById('tab-players');
+  const lb=getLeaderboard();
+  let h='';
+
+  if(!isAdmin){
+    h+=`<div class="locked-notice">🔒 <div><div style="font-weight:500;color:var(--text)">Admin only</div><div style="font-size:12px;margin-top:2px">Adding and removing players requires admin access.</div></div><button class="btn btn-green btn-sm" style="margin-left:auto;white-space:nowrap" onclick="requireAdmin(()=>{renderPlayers()})">Unlock</button></div>`;
+  } else {
+    h+=`<div style="display:flex;gap:8px;margin-bottom:16px">
+      <input class="input" id="np-name" placeholder="Enter player name" style="flex:1" onkeydown="if(event.key==='Enter')addPlayer()">
+      <button class="btn btn-primary" onclick="addPlayer()">+ Add</button>
+    </div>`;
+  }
+
+  if(!state.participants.length){ h+=`<div class="empty"><div class="empty-icon">👥</div>No players yet. Ask your admin to add friends!</div>`; el.innerHTML=h; return; }
+  h+='<div class="card" style="padding:12px 16px">';
+  state.participants.forEach(p=>{
+    const s=lb.find(x=>x.id===p.id)||{wins:0,losses:0,net:0};
+    const ns=s.net>0?`+₹${s.net}`:s.net<0?`−₹${Math.abs(s.net)}`:'₹0';
+    const nc=s.net>0?'net-pos':s.net<0?'net-neg':'net-zero';
+    h+=`<div class="lb-row">
+      <div class="avatar" style="background:${p.color}22;color:${p.color}">${p.initials}</div>
+      <div style="flex:1"><div style="font-size:14px;font-weight:500;color:var(--text)">${p.name}</div><div style="font-size:11px;color:var(--text3)">${s.wins}W · ${s.losses}L</div></div>
+      <div class="${nc}" style="margin-right:${isAdmin?'10px':'0'}">${ns}</div>
+      ${isAdmin?`<button onclick="removePlayer('${p.id}')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:4px">×</button>`:''}
+    </div>`;
+  });
+  h+='</div>'; el.innerHTML=h;
+}
+
+function renderShootouts() {
+  const el=document.getElementById('tab-shootouts');
+  if(!state.shootouts.length){ el.innerHTML=`<div class="empty"><div class="empty-icon">🎉</div>Shootouts appear here after results are declared</div>`; return; }
+  let h='';
+  state.shootouts.slice().reverse().forEach(s=>{
+    h+=`<div class="shootout-card">
+      <div class="shootout-match">🏏 Match ${s.matchId}: ${s.t1} vs ${s.t2}</div>
+      <div class="shootout-winner">🏆 ${s.winner} won · ${fmtDate(s.date)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">`;
+    (s.winnerNames||[]).forEach(n=>{h+=`<span class="chip chip-win">🎉 ${n}</span>`;});
+    (s.lossNames||[]).forEach(n=>{h+=`<span class="chip chip-loss">💸 ${n}</span>`;});
+    (s.nobetNames||[]).forEach(n=>{h+=`<span class="chip chip-nobet">😴 ${n} · No Bet</span>`;});
+    h+='</div></div>';
+  });
+  el.innerHTML=h;
+}
+
+function renderAdmin() {
+  const el=document.getElementById('tab-admin');
+  if(!isAdmin){
+    el.innerHTML=`<div style="padding:40px 24px;text-align:center">
+      <div style="font-size:48px;margin-bottom:16px">🔒</div>
+      <div style="font-size:16px;font-weight:500;margin-bottom:8px;color:var(--text)">Admin access required</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:24px">Enter your PIN to access admin controls</div>
+      <button class="btn btn-primary" onclick="requireAdmin(()=>renderAdmin())">Enter PIN</button>
+    </div>`;
+    return;
+  }
+  el.innerHTML=`
+  <div class="card">
+    <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px">Data management</div>
+    <div class="admin-row"><div><div class="admin-label">Force sync</div><div class="admin-desc">Pull latest data from Firebase</div></div><button class="btn btn-outline btn-sm" onclick="syncNow()">↺ Sync</button></div>
+    <div class="admin-row"><div><div class="admin-label">Export backup</div><div class="admin-desc">Download all data as JSON</div></div><button class="btn btn-outline btn-sm" onclick="exportData()">↓ Export</button></div>
+    <div class="admin-row"><div><div class="admin-label">Import backup</div><div class="admin-desc">Restore from JSON file</div></div><button class="btn btn-outline btn-sm" onclick="importData()">↑ Import</button></div>
+    <div class="admin-row"><div><div class="admin-label">Change Firebase URL</div><div class="admin-desc">Switch to a different database</div></div><button class="btn btn-outline btn-sm" onclick="changeDb()">Edit</button></div>
+    <div class="admin-row" style="border-bottom:none"><div><div class="admin-label" style="color:var(--red2)">Reset all data</div><div class="admin-desc">Permanently wipes everything</div></div><button class="btn btn-red btn-sm" onclick="resetAll()">Reset</button></div>
+  </div>
+  <div class="card" style="margin-top:4px">
+    <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px">Hosting guide</div>
+    <div>
+      <div class="fb-step"><div class="fb-step-num">1</div><div class="fb-step-text"><strong>Netlify Drop (easiest):</strong> Go to netlify.com/drop, drag this HTML file. Get a free URL instantly.</div></div>
+      <div class="fb-step"><div class="fb-step-num">2</div><div class="fb-step-text"><strong>GitHub Pages:</strong> Upload to a repo → Settings → Pages → Enable. Share the URL.</div></div>
+      <div class="fb-step"><div class="fb-step-num">3</div><div class="fb-step-text"><strong>WhatsApp:</strong> Send file directly. Friends open in phone browser — works offline-first.</div></div>
+      <div class="fb-step"><div class="fb-step-num">4</div><div class="fb-step-text"><strong>PIN reminder:</strong> Your admin PIN is <span class="code-pill">known only to you</span>. Keep it safe — it's baked into the file.</div></div>
+    </div>
+  </div>
+  <div style="text-align:center;padding:20px;font-size:11px;color:var(--text3)">IPL 2026 · Mar 28 – May 31 · 70 matches · For fun only 🏏</div>`;
+}
+
+// ── PLAYERS ──
+async function addPlayer() {
+  const inp=document.getElementById('np-name'); const name=inp.value.trim(); if(!name) return;
+  state.participants.push({id:'p'+Date.now(),name,color:COLORS[state.participants.length%COLORS.length],initials:initials(name)});
+  inp.value=''; await saveToFirebase(); renderAll();
+}
+async function removePlayer(id) {
+  if(!confirm('Remove this player?')) return;
+  state.participants=state.participants.filter(p=>p.id!==id); await saveToFirebase(); renderAll();
+}
+
+// ── BET MODAL ── (open to all — anyone can log a bet for any player)
+function openBetModal(matchId) {
+  const m=MATCHES.find(x=>x.id===matchId); if(!m) return;
+  activeBetMatch=m; selTeamIdx=null; betAmount=10;
+  document.getElementById('bm-title').textContent=`${m.t1} vs ${m.t2}`;
+  document.getElementById('bm-sub').textContent=`Match ${m.id} · ${m.day} ${fmtDate(m.date)} · ${m.time}`;
+  const sel=document.getElementById('bm-player');
+  sel.innerHTML=state.participants.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  document.getElementById('bm-t1-name').textContent=m.t1;
+  document.getElementById('bm-t1-full').textContent=TEAM_FULL[m.t1]||'';
+  document.getElementById('bm-t2-name').textContent=m.t2;
+  document.getElementById('bm-t2-full').textContent=TEAM_FULL[m.t2]||'';
+  document.getElementById('bm-t1').className='team-pick';
+  document.getElementById('bm-t2').className='team-pick';
+  document.getElementById('bm-amt').textContent='₹10';
+  document.getElementById('bet-modal').classList.add('open');
+}
+function closeBetModal(){ document.getElementById('bet-modal').classList.remove('open'); activeBetMatch=null; }
+function selTeam(i){ selTeamIdx=i; document.getElementById('bm-t1').className='team-pick'+(i===0?' selected':''); document.getElementById('bm-t2').className='team-pick'+(i===1?' selected':''); }
+function chgAmt(d){ betAmount=Math.max(10,betAmount+d); document.getElementById('bm-amt').textContent='₹'+betAmount; }
+async function submitBet() {
+  if(selTeamIdx===null){ alert('Please pick a team!'); return; }
+  const team=selTeamIdx===0?activeBetMatch.t1:activeBetMatch.t2;
+  const pid=document.getElementById('bm-player').value;
+  if(!state.bets[activeBetMatch.id]) state.bets[activeBetMatch.id]={};
+  state.bets[activeBetMatch.id][pid]={team,amount:betAmount};
+  closeBetModal(); await saveToFirebase(); renderAll();
+}
+
+// ── RESULT MODAL ── (admin only)
+function openResultModal(matchId) {
+  requireAdmin(()=>{
+    const m=MATCHES.find(x=>x.id===matchId); if(!m) return;
+    activeResultMatch=m; selWinnerIdx=null;
+    document.getElementById('rm-sub').textContent=`Match ${m.id}: ${m.t1} vs ${m.t2}`;
+    document.getElementById('rm-t1-name').textContent=m.t1;
+    document.getElementById('rm-t2-name').textContent=m.t2;
+    document.getElementById('rm-t1').className='team-pick';
+    document.getElementById('rm-t2').className='team-pick';
+    document.getElementById('result-modal').classList.add('open');
+  });
+}
+function closeResultModal(){ document.getElementById('result-modal').classList.remove('open'); activeResultMatch=null; }
+function selWinner(i){ selWinnerIdx=i; document.getElementById('rm-t1').className='team-pick'+(i===0?' selected':''); document.getElementById('rm-t2').className='team-pick'+(i===1?' selected':''); }
+async function submitResult() {
+  if(selWinnerIdx===null){ alert('Please select the winning team!'); return; }
+  const m=activeResultMatch; const winner=selWinnerIdx===0?m.t1:m.t2;
+  state.results[m.id]=winner;
+  const mb=state.bets[m.id]||{};
+  const winnerNames=state.participants.filter(p=>mb[p.id]&&mb[p.id].team===winner).map(p=>p.name);
+  const lossNames=state.participants.filter(p=>mb[p.id]&&mb[p.id].team!==winner).map(p=>p.name);
+  const nobetNames=state.participants.filter(p=>!mb[p.id]).map(p=>p.name);
+  state.shootouts.push({matchId:m.id,t1:m.t1,t2:m.t2,winner,date:m.date,winnerNames,lossNames,nobetNames});
+  closeResultModal(); await saveToFirebase(); renderAll();
+  setTimeout(()=>{
+    alert(`🎉 SHOOTOUT — Match ${m.id}\n${m.t1} vs ${m.t2}\n🏆 Winner: ${winner}\n\n${winnerNames.length?'Winners: '+winnerNames.join(', '):'No winners!'}\n${nobetNames.length?'No Bet: '+nobetNames.join(', '):''}`)
+  },300);
+}
+
+// ── ADMIN TOOLS ──
+function exportData(){ const a=document.createElement('a'); a.href='data:text/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(state,null,2)); a.download='ipl2026_backup.json'; a.click(); }
+function importData(){ const i=document.createElement('input'); i.type='file'; i.accept='.json'; i.onchange=async e=>{ try{ const t=await e.target.files[0].text(); state=JSON.parse(t); await saveToFirebase(); renderAll(); alert('Imported!'); }catch{ alert('Invalid file'); } }; i.click(); }
+function changeDb(){ localStorage.removeItem('ipl_fb_url'); location.reload(); }
+async function resetAll(){ if(!confirm('Delete ALL data permanently? This cannot be undone.')) return; state={participants:[],bets:{},results:{},shootouts:[]}; await saveToFirebase(); renderAll(); alert('All data reset.'); }
+
+// ── TABS ──
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i)=>{ t.className='tab'+(['matches','leaderboard','players','shootouts','admin'][i]===tab?' active':''); });
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  renderTab(tab);
+}
+function renderTab(tab){ const m={matches:renderMatches,leaderboard:renderLeaderboard,players:renderPlayers,shootouts:renderShootouts,admin:renderAdmin}; if(m[tab]) m[tab](); }
+
+// ── INIT ──
+(function init(){
+  const url=localStorage.getItem('ipl_fb_url'); const name=localStorage.getItem('ipl_group_name');
+  if(url){ dbUrl=url; document.getElementById('group-name-display').textContent=name?'· '+name:''; startApp(); }
+  else{ document.getElementById('setup-screen').classList.add('open'); setSyncMsg('Waiting for setup...'); }
+})();
+</script>
+</body>
+</html>
