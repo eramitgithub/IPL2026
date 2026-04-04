@@ -133,8 +133,9 @@ select.inp{cursor:pointer}
 .ft strong{color:var(--text)}
 .cpill{background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:1px 6px;font-size:11px;color:var(--teal);font-family:monospace}
 @media(max-width:480px){.sg{gap:8px}.sv{font-size:22px}.tn{font-size:17px}.modal{padding:20px 16px}}
-.join-box{background:linear-gradient(135deg,rgba(0,194,184,0.07) 0%,rgba(0,194,184,0.02) 100%);border:1px solid rgba(0,194,184,0.25);border-radius:var(--r);padding:16px;margin-bottom:14px;}
-
+.join-box{background:linear-gradient(135deg,rgba(0,194,184,0.07) 0%,rgba(0,194,184,0.02) 100%);border:1px solid rgba(0,194,184,0.25);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.ebet-btn{background:none;border:1px solid currentColor;border-radius:3px;cursor:pointer;font-size:10px;padding:1px 4px;margin-left:3px;opacity:0.7;line-height:1.4;vertical-align:middle}
+.ebet-btn:hover{opacity:1}
 </style>
 </head>
 <body>
@@ -221,17 +222,15 @@ select.inp{cursor:pointer}
   <div id="tab-admin" class="sec"></div>
 </div>
 
-<!-- BET MODAL -->
+<!-- BET MODAL (place + edit) -->
 <div class="mbg" id="bet-modal">
   <div class="modal">
     <div class="mt" id="bm-title">Place Bet</div>
     <div class="ms" id="bm-sub"></div>
-    <!-- Player section: shown when logged-in player is betting -->
     <div id="bm-player-section" style="margin-bottom:14px">
       <div class="lbl">Betting as</div>
       <div style="background:var(--bg3);border:1px solid rgba(0,194,184,0.2);border-radius:var(--rs);padding:10px 14px;font-size:14px;font-weight:500;color:var(--teal)" id="bm-player-display"></div>
     </div>
-    <!-- Admin section: dropdown shown only for admin -->
     <div id="bm-admin-section" style="margin-bottom:14px;display:none">
       <div class="lbl">Betting for</div>
       <select class="inp" id="bm-player-admin"></select>
@@ -250,7 +249,7 @@ select.inp{cursor:pointer}
     </div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:20px">Minimum &#8377;10 &middot; multiples of &#8377;10</div>
     <div style="display:flex;gap:8px">
-      <button class="btn bp2" style="flex:1" onclick="submitBet()">Confirm Bet</button>
+      <button class="btn bp2" style="flex:1" id="bm-confirm-btn" onclick="submitBet()">Confirm Bet</button>
       <button class="btn bo" onclick="closeBetModal()">Cancel</button>
     </div>
   </div>
@@ -359,69 +358,87 @@ var MATCHES = [
 
 var ST = {participants:[],bets:{},results:{}};
 var isAdmin = false;
-var loggedInPlayer = null; // {id, name, code, color, initials}
+var loggedInPlayer = null;
 var pinBuf = '';
 var pinCb = null;
 var activeBetMatch = null;
+var activeBetEditPid = null; // null = new bet, pid = editing existing bet
 var selTeamIdx = null;
 var betAmount = 10;
 var activeResultMatch = null;
 var selWinnerIdx = null;
 
-function todayStr() { return new Date().toISOString().split('T')[0]; }
-function fmtDate(d) { var p = d.slice(5).split('-'); return p[1]+'/'+p[0]; }
-function ini(n) { var p=n.trim().split(' '); return ((p[0][0]||'')+(p[1]?p[1][0]:(p[0][1]||''))).toUpperCase(); }
-function totalPool() { var s=0; var mk=Object.keys(ST.bets); for(var i=0;i<mk.length;i++){var mb=ST.bets[mk[i]];var pk=Object.keys(mb);for(var j=0;j<pk.length;j++)s+=mb[pk[j]].amount;} return s; }
-function getStatus(m) { var t=todayStr(); if(ST.results[m.id])return 'done'; if(m.date===t)return 'live'; if(m.date<t)return 'pending'; return 'upcoming'; }
+function todayStr(){return new Date().toISOString().split('T')[0];}
+function fmtDate(d){var p=d.slice(5).split('-');return p[1]+'/'+p[0];}
+function ini(n){var p=n.trim().split(' ');return ((p[0][0]||'')+(p[1]?p[1][0]:(p[0][1]||''))).toUpperCase();}
+function totalPool(){var s=0;var mk=Object.keys(ST.bets);for(var i=0;i<mk.length;i++){var mb=ST.bets[mk[i]];var pk=Object.keys(mb);for(var j=0;j<pk.length;j++)s+=mb[pk[j]].amount;}return s;}
+function isBetOpen(m){
+  // Returns true if current time is more than 30 min before match start
+  var now=new Date();
+  // Parse match date + time
+  var parts=m.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if(!parts)return false;
+  var h=parseInt(parts[1]);var mn=parseInt(parts[2]);var ampm=parts[3].toUpperCase();
+  if(ampm==='PM'&&h!==12)h+=12;
+  if(ampm==='AM'&&h===12)h=0;
+  var dp=m.date.split('-');
+  var matchTime=new Date(parseInt(dp[0]),parseInt(dp[1])-1,parseInt(dp[2]),h,mn,0,0);
+  var cutoff=new Date(matchTime.getTime()-30*60*1000); // 30 min before
+  return now<cutoff;
+}
+function betCutoffStr(m){
+  var parts=m.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if(!parts)return '';
+  var h=parseInt(parts[1]);var mn=parseInt(parts[2]);var ampm=parts[3].toUpperCase();
+  if(ampm==='PM'&&h!==12)h+=12;
+  if(ampm==='AM'&&h===12)h=0;
+  var ch=h;var cm=mn-30;
+  if(cm<0){cm+=60;ch-=1;}
+  var dispH=ch>12?ch-12:ch;if(dispH===0)dispH=12;
+  var dispAMPM=ch>=12?'PM':'AM';
+  return dispH+':'+(cm<10?'0':'')+cm+' '+dispAMPM;
+}
+function getStatus(m){var t=todayStr();if(ST.results[m.id])return 'done';if(m.date===t)return 'live';if(m.date<t)return 'pending';return 'upcoming';}
 
-function getLeaderboard() {
+function getLeaderboard(){
   var sc={};
   for(var i=0;i<ST.participants.length;i++){var p=ST.participants[i];sc[p.id]={id:p.id,name:p.name,color:p.color,initials:p.initials,wins:0,losses:0,nobets:0,net:0};}
   for(var mi=0;mi<MATCHES.length;mi++){
-    var m=MATCHES[mi]; if(!ST.results[m.id])continue;
-    var winner=ST.results[m.id]; var mb=ST.bets[m.id]||{};
+    var m=MATCHES[mi];if(!ST.results[m.id])continue;
+    var winner=ST.results[m.id];var mb=ST.bets[m.id]||{};
     for(var pi=0;pi<ST.participants.length;pi++){
-      var pp=ST.participants[pi]; if(!sc[pp.id])continue;
+      var pp=ST.participants[pi];if(!sc[pp.id])continue;
       var bet=mb[pp.id];
       if(!bet){sc[pp.id].net-=10;sc[pp.id].nobets++;sc[pp.id].losses++;}
       else if(bet.team===winner){sc[pp.id].net+=bet.amount;sc[pp.id].wins++;}
       else{sc[pp.id].net-=bet.amount;sc[pp.id].losses++;}
     }
   }
-  var arr=[]; var sk=Object.keys(sc); for(var i=0;i<sk.length;i++)arr.push(sc[sk[i]]);
-  arr.sort(function(a,b){return b.net-a.net;}); return arr;
+  var arr=[];var sk=Object.keys(sc);for(var i=0;i<sk.length;i++)arr.push(sc[sk[i]]);
+  arr.sort(function(a,b){return b.net-a.net;});return arr;
 }
 
-function gsFetch() { return fetch(SCRIPT_URL+'?action=read&_='+Date.now()).then(function(r){return r.json();}); }
-function gsPost(payload) { return fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(payload)}).then(function(r){return r.json();}); }
-
+function gsFetch(){return fetch(SCRIPT_URL+'?action=read&_='+Date.now()).then(function(r){return r.json();});}
+function gsPost(payload){return fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(payload)}).then(function(r){return r.json();});}
 function setSyncMsg(m){document.getElementById('smsg').textContent=m;document.getElementById('sbar').className='sbar';document.getElementById('sdot').className='dot pulse';}
 function setSyncOk(m){document.getElementById('smsg').textContent=m;document.getElementById('sbar').className='sbar ok';document.getElementById('sdot').className='dot';}
 function setSyncErr(m){document.getElementById('smsg').textContent=m;document.getElementById('sbar').className='sbar err';document.getElementById('sdot').className='dot';}
 
-var lastFetchTime = 0;
-var CACHE_TTL = 300000; // 5 min cache — reduces API calls for large groups
+var lastFetchTime=0;
+var CACHE_TTL=300000;
 
-function loadFromSheets(force) {
-  var now = Date.now();
-  // Use cached data if fresh enough and not a forced sync
-  if(!force && lastFetchTime > 0 && (now - lastFetchTime) < CACHE_TTL) {
-    setSyncOk('Cached ' + new Date(lastFetchTime).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
-    return Promise.resolve();
-  }
+function loadFromSheets(force){
+  var now=Date.now();
+  if(!force&&lastFetchTime>0&&(now-lastFetchTime)<CACHE_TTL){setSyncOk('Cached '+new Date(lastFetchTime).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));return Promise.resolve();}
   setSyncMsg('Syncing with Google Sheets...');
   return gsFetch().then(function(res){
     if(res.error)throw new Error(res.error);
-    var d=res.data||{};
-    ST.participants=d.participants||[];
-    ST.bets=d.bets||{};
-    ST.results=d.results||{};
-    lastFetchTime = Date.now();
-    setSyncOk('Synced '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
+    var d=res.data||{};ST.participants=d.participants||[];ST.bets=d.bets||{};ST.results=d.results||{};
+    lastFetchTime=Date.now();setSyncOk('Synced '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
   }).catch(function(e){setSyncErr('Sync failed: '+e.message);});
 }
 
-function saveToSheets() {
+function saveToSheets(){
   return gsPost({action:'writeAll',data:{participants:ST.participants,bets:ST.bets,results:ST.results}})
     .then(function(res){if(res.error)throw new Error(res.error);lastFetchTime=0;setSyncOk('Saved '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));})
     .catch(function(e){setSyncErr('Save failed: '+e.message);});
@@ -432,30 +449,20 @@ function syncNow(){lastFetchTime=0;loadFromSheets(true).then(function(){renderAl
 function saveSetup(){
   var url=document.getElementById('su-url').value.trim();
   if(!url||url.indexOf('script.google.com')===-1){alert('Please paste a valid Google Apps Script URL');return;}
-  SCRIPT_URL=url; localStorage.setItem('ipl_gs_url',url);
-  document.getElementById('setup-screen').classList.remove('open');
-  startApp();
+  SCRIPT_URL=url;localStorage.setItem('ipl_gs_url',url);
+  document.getElementById('setup-screen').classList.remove('open');startApp();
 }
 
 function startApp(){
   var savedCode=localStorage.getItem('ipl_player_code');
   loadFromSheets().then(function(){
-    if(savedCode){
-      for(var i=0;i<ST.participants.length;i++){
-        if(ST.participants[i].code&&ST.participants[i].code===savedCode){loggedInPlayer=ST.participants[i];break;}
-      }
-    }
+    if(savedCode){for(var i=0;i<ST.participants.length;i++){if(ST.participants[i].code&&ST.participants[i].code===savedCode){loggedInPlayer=ST.participants[i];break;}}}
     renderAll();
-    setInterval(function(){
-      loadFromSheets().then(function(){
-        if(loggedInPlayer){for(var i=0;i<ST.participants.length;i++){if(ST.participants[i].id===loggedInPlayer.id){loggedInPlayer=ST.participants[i];break;}}}
-        renderAll();
-      });
-    },300000);
+    setInterval(function(){loadFromSheets().then(function(){if(loggedInPlayer){for(var i=0;i<ST.participants.length;i++){if(ST.participants[i].id===loggedInPlayer.id){loggedInPlayer=ST.participants[i];break;}}}renderAll();});},300000);
   });
 }
 
-function requireAdmin(cb){if(isAdmin){cb();return;} pinBuf='';pinCb=cb;document.getElementById('perr').textContent='';updateDots();document.getElementById('pmod').classList.add('open');}
+function requireAdmin(cb){if(isAdmin){cb();return;}pinBuf='';pinCb=cb;document.getElementById('perr').textContent='';updateDots();document.getElementById('pmod').classList.add('open');}
 function pinKey(k){if(pinBuf.length>=4)return;pinBuf+=k;updateDots();if(pinBuf.length===4){setTimeout(function(){if(pinBuf===ADMIN_PIN){isAdmin=true;document.getElementById('pmod').classList.remove('open');document.getElementById('abadge').classList.add('show');pinBuf='';updateDots();if(pinCb){pinCb();pinCb=null;}}else{document.getElementById('perr').textContent='Wrong PIN. Try again.';var ds=document.querySelectorAll('.pdot');for(var i=0;i<ds.length;i++){ds[i].classList.add('shake');(function(d){setTimeout(function(){d.classList.remove('shake');},400);})(ds[i]);}pinBuf='';updateDots();}},120);}}
 function pinDel(){pinBuf=pinBuf.slice(0,-1);updateDots();document.getElementById('perr').textContent='';}
 function pinCancel(){pinBuf='';pinCb=null;document.getElementById('pmod').classList.remove('open');updateDots();}
@@ -464,32 +471,37 @@ function logoutAdmin(){if(!confirm('Lock admin?'))return;isAdmin=false;document.
 
 function renderAll(){
   document.getElementById('hpool').textContent='\u20B9'+totalPool();
-  var pb=document.getElementById('player-badge'); var pbn=document.getElementById('player-badge-name');
+  var pb=document.getElementById('player-badge');var pbn=document.getElementById('player-badge-name');
   if(loggedInPlayer&&pb&&pbn){pb.style.display='flex';pbn.textContent=loggedInPlayer.name.split(' ')[0];}
   else if(pb){pb.style.display='none';}
   var tabs=['matches','leaderboard','players','admin'];
-  var allTabs=document.querySelectorAll('.tab'); var idx=0;
+  var allTabs=document.querySelectorAll('.tab');var idx=0;
   for(var i=0;i<allTabs.length;i++){if(allTabs[i].classList.contains('active')){idx=i;break;}}
   renderTab(tabs[idx]||'matches');
 }
 
 function renderMatches(){
-  var el=document.getElementById('tab-matches'); var td=todayStr();
+  var el=document.getElementById('tab-matches');var td=todayStr();
   var todays=[],upcoming=[],past=[];
   for(var i=0;i<MATCHES.length;i++){if(MATCHES[i].date===td)todays.push(MATCHES[i]);else if(MATCHES[i].date>td)upcoming.push(MATCHES[i]);else past.push(MATCHES[i]);}
-  upcoming=upcoming.slice(0,15); past=past.reverse().slice(0,12);
+  upcoming=upcoming.slice(0,15);past=past.reverse().slice(0,12);
   var h='';
-  if(todays.length){h+='<div class="notif">&#128276; Match day! Bets close at 3:20 PM IST</div><div class="sh">Today</div>';for(var i=0;i<todays.length;i++)h+=matchCard(todays[i]);}
+  if(todays.length){h+='<div class="notif">&#128276; Match day!</div><div class="sh">Today</div>';for(var i=0;i<todays.length;i++)h+=matchCard(todays[i]);}
   if(upcoming.length){h+='<div class="sh">Upcoming</div>';for(var i=0;i<upcoming.length;i++)h+=matchCard(upcoming[i]);}
   if(past.length){h+='<div class="sh">Recent results</div>';for(var i=0;i<past.length;i++)h+=matchCard(past[i]);}
   if(!h)h='<div class="empty">No matches to show</div>';
   el.innerHTML=h;
+  // wire up admin edit/delete buttons after render
+  var edits=el.querySelectorAll('.ebet-btn[data-action="edit"]');
+  for(var i=0;i<edits.length;i++){edits[i].addEventListener('click',function(){adminEditBet(parseInt(this.getAttribute('data-mid')),this.getAttribute('data-pid'));});}
+  var dels=el.querySelectorAll('.ebet-btn[data-action="del"]');
+  for(var i=0;i<dels.length;i++){dels[i].addEventListener('click',function(){adminDeleteBet(parseInt(this.getAttribute('data-mid')),this.getAttribute('data-pid'));});}
 }
 
 function matchCard(m){
-  var st=getStatus(m); var mb=ST.bets[m.id]||{}; var bpids=Object.keys(mb);
-  var pool=0; for(var i=0;i<bpids.length;i++)pool+=mb[bpids[i]].amount;
-  var result=ST.results[m.id]; var t1c=TC[m.t1]||'#888'; var t2c=TC[m.t2]||'#888';
+  var st=getStatus(m);var mb=ST.bets[m.id]||{};var bpids=Object.keys(mb);
+  var pool=0;for(var i=0;i<bpids.length;i++)pool+=mb[bpids[i]].amount;
+  var result=ST.results[m.id];var t1c=TC[m.t1]||'#888';var t2c=TC[m.t2]||'#888';
   var badge='';
   if(st==='live')badge='<span class="badge bl"><span class="dot pulse" style="background:var(--red2)"></span> Live</span>';
   else if(st==='done')badge='<span class="badge bd">&#10003; Done</span>';
@@ -499,33 +511,112 @@ function matchCard(m){
   if(ST.participants.length>0&&(st!=='upcoming'||bpids.length>0)){
     chips='<div class="bc">';
     for(var i=0;i<ST.participants.length;i++){
-      var p=ST.participants[i]; var b=mb[p.id]; var fn=p.name.split(' ')[0];
-      if(b){var won=result&&b.team===result;var lost=result&&b.team!==result;var cls=won?'chip cw':(lost?'chip cl':'chip cb');var ico=won?'&#10003; ':(lost?'&#10007; ':'');var pnl=won?'(+\u20B9'+b.amount+')':(lost?'(-\u20B9'+b.amount+')':'');chips+='<span class="'+cls+'">'+ico+fn+' \u2192 '+b.team+' \u20B9'+b.amount+' '+pnl+'</span>';}
-      else if(st!=='upcoming')chips+='<span class="chip cn">'+fn+' \u00B7 No Bet (-\u20B910)</span>';
+      var p=ST.participants[i];var b=mb[p.id];var fn=p.name.split(' ')[0];
+      if(b){
+        var won=result&&b.team===result;var lost=result&&b.team!==result;
+        var cls=won?'chip cw':(lost?'chip cl':'chip cb');
+        var ico=won?'&#10003; ':(lost?'&#10007; ':'');
+        var pnl=won?'(+\u20B9'+b.amount+')':(lost?'(-\u20B9'+b.amount+')':'');
+        chips+='<span class="'+cls+'">'+ico+fn+' \u2192 '+b.team+' \u20B9'+b.amount+' '+pnl;
+        // Admin edit/delete buttons — only on non-completed matches
+        if(isAdmin&&!result){
+          chips+='<button class="ebet-btn" data-action="edit" data-mid="'+m.id+'" data-pid="'+p.id+'" style="color:var(--teal)">&#9998;</button>';
+          chips+='<button class="ebet-btn" data-action="del" data-mid="'+m.id+'" data-pid="'+p.id+'" style="color:var(--red2)">&#10007;</button>';
+        }
+        chips+='</span>';
+      } else if(st!=='upcoming'){
+        chips+='<span class="chip cn">'+fn+' \u00B7 No Bet (-\u20B910)';
+        // Admin can add a bet even for no-bet players (as long as match not completed)
+        if(isAdmin&&!result){
+          chips+='<button class="ebet-btn" data-action="edit" data-mid="'+m.id+'" data-pid="'+p.id+'" style="color:var(--teal)">+ Add</button>';
+        }
+        chips+='</span>';
+      }
     }
     chips+='</div>';
   }
-  var canBet=(st==='upcoming'||st==='live')&&ST.participants.length>0;
+  var canBet=(st==='upcoming'||st==='live')&&ST.participants.length>0&&isBetOpen(m);
   var canResult=st==='pending';
-  var betBtn=canBet?'<button class="btn bgold bsm" onclick="openBetModal('+m.id+')">+ Bet</button>':'';
+  var betBtn=canBet?'<button class="btn bgold bsm" onclick="openBetModal('+m.id+', null)">+ Bet</button>':'';
   var resBtn=canResult?(isAdmin?'<button class="btn bo bsm" onclick="openResultModal('+m.id+')">Result</button>':'<span style="font-size:18px;color:var(--text3);padding:4px" title="Admin only">&#128274;</span>'):'';
   var wBanner=result?'<div class="wb">&#127942; '+result+' won</div>':'';
   var poolLine=pool>0?'<div style="font-size:11px;color:var(--text3);margin-top:4px">Pool: \u20B9'+pool+' \u00B7 '+bpids.length+' bet'+(bpids.length!==1?'s':'')+'</div>':'';
+  var cutoffLine='';
+  if(st==='upcoming'||st==='live'){
+    var open=isBetOpen(m);
+    var ctime=betCutoffStr(m);
+    if(open){cutoffLine='<div style="font-size:11px;color:var(--teal);margin-top:4px">&#9201; Bets close at '+ctime+'</div>';}
+    else{cutoffLine='<div style="font-size:11px;color:var(--red2);margin-top:4px">&#128274; Bets closed (match within 30 min)</div>';}
+  }
   return '<div class="mc '+(st==='live'?'today':'')+' '+(st==='done'?'done':'')+'">'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'+
       '<div style="flex:1;min-width:0">'+
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">'+badge+'<span style="font-size:11px;color:var(--text3)">Match '+m.id+'</span>'+wBanner+'</div>'+
         '<div class="tr"><span class="td" style="background:'+t1c+'"></span><span class="tn" style="color:'+t1c+'">'+m.t1+'</span><span class="vs">vs</span><span class="td" style="background:'+t2c+'"></span><span class="tn" style="color:'+t2c+'">'+m.t2+'</span></div>'+
         '<div class="mm">'+m.day+' \u00B7 '+fmtDate(m.date)+' \u00B7 '+m.time+'</div>'+
-        '<div class="mv">'+m.venue+'</div>'+poolLine+
+        '<div class="mv">'+m.venue+'</div>'+poolLine+cutoffLine+
       '</div>'+
       '<div style="display:flex;gap:6px;flex-shrink:0">'+betBtn+resBtn+'</div>'+
     '</div>'+chips+'</div>';
 }
 
+// ── ADMIN: edit a specific player's bet ──
+function adminEditBet(matchId, pid){
+  var m=null;for(var i=0;i<MATCHES.length;i++){if(MATCHES[i].id===matchId){m=MATCHES[i];break;}}if(!m)return;
+  var existing=ST.bets[matchId]&&ST.bets[matchId][pid];
+  activeBetMatch=m;
+  activeBetEditPid=pid; // editing mode: store pid being edited
+  selTeamIdx=null;
+  betAmount=existing?existing.amount:10;
+
+  document.getElementById('bm-title').textContent=(existing?'Edit Bet':'Add Bet')+': '+m.t1+' vs '+m.t2;
+  document.getElementById('bm-sub').textContent='Match '+m.id+' \u00B7 '+m.day+' '+fmtDate(m.date);
+  document.getElementById('bm-confirm-btn').textContent=existing?'Update Bet':'Add Bet';
+
+  // In edit mode always show dropdown locked to this player
+  document.getElementById('bm-player-section').style.display='none';
+  document.getElementById('bm-admin-section').style.display='block';
+  var sel=document.getElementById('bm-player-admin');
+  sel.innerHTML='';
+  for(var i=0;i<ST.participants.length;i++){
+    var opt=document.createElement('option');opt.value=ST.participants[i].id;opt.textContent=ST.participants[i].name;
+    if(ST.participants[i].id===pid)opt.selected=true;
+    sel.appendChild(opt);
+  }
+  sel.disabled=true; // lock to this player when editing
+
+  document.getElementById('bm-player-err').textContent='';
+  document.getElementById('bm-t1n').textContent=m.t1;document.getElementById('bm-t1f').textContent=TF[m.t1]||'';
+  document.getElementById('bm-t2n').textContent=m.t2;document.getElementById('bm-t2f').textContent=TF[m.t2]||'';
+
+  // Pre-select current team if editing
+  if(existing){
+    var tidx=existing.team===m.t1?0:1;
+    selTeamIdx=tidx;
+    document.getElementById('bm-t1').className='tp'+(tidx===0?' sel':'');
+    document.getElementById('bm-t2').className='tp'+(tidx===1?' sel':'');
+  } else {
+    document.getElementById('bm-t1').className='tp';
+    document.getElementById('bm-t2').className='tp';
+  }
+  document.getElementById('bm-amt').textContent='\u20B9'+betAmount;
+  document.getElementById('bet-modal').classList.add('open');
+}
+
+// ── ADMIN: delete a specific player's bet ──
+function adminDeleteBet(matchId, pid){
+  var pname='';
+  for(var i=0;i<ST.participants.length;i++){if(ST.participants[i].id===pid){pname=ST.participants[i].name;break;}}
+  if(!confirm('Remove bet for '+pname+'?'))return;
+  if(ST.bets[matchId]&&ST.bets[matchId][pid]){
+    delete ST.bets[matchId][pid];
+    saveToSheets().then(function(){renderAll();});
+  }
+}
+
 function renderLeaderboard(){
-  var el=document.getElementById('tab-leaderboard'); var lb=getLeaderboard();
-  var done=0; for(var i=0;i<MATCHES.length;i++){if(ST.results[MATCHES[i].id])done++;}
+  var el=document.getElementById('tab-leaderboard');var lb=getLeaderboard();
+  var done=0;for(var i=0;i<MATCHES.length;i++){if(ST.results[MATCHES[i].id])done++;}
   var h='<div class="sg">'+
     '<div class="sc"><div class="sv">'+done+'</div><div class="sl">Matches done</div></div>'+
     '<div class="sc"><div class="sv gold">\u20B9'+totalPool()+'</div><div class="sl">Total pool</div></div>'+
@@ -539,34 +630,31 @@ function renderLeaderboard(){
   '</div>';
   h+='<div class="card" style="padding:12px 16px">';
   for(var i=0;i<lb.length;i++){
-    var p=lb[i]; var rc=i===0?'r1':(i===1?'r2':(i===2?'r3':'rn'));
+    var p=lb[i];var rc=i===0?'r1':(i===1?'r2':(i===2?'r3':'rn'));
     var nc=p.net>0?'np':(p.net<0?'nn':'nz');
     var ns=p.net>0?'+\u20B9'+p.net:(p.net<0?'\u2212\u20B9'+Math.abs(p.net):'\u20B90');
     h+='<div class="lbr"><div class="rank '+rc+'">'+(i+1)+'</div><div class="ava" style="background:'+p.color+'22;color:'+p.color+'">'+p.initials+'</div><div style="flex:1"><div style="font-size:14px;font-weight:500;color:var(--text)">'+p.name+'</div><div style="font-size:11px;color:var(--text3)">'+p.wins+'W \u00B7 '+p.losses+'L \u00B7 '+p.nobets+' No-bet</div></div><div class="'+nc+'">'+ns+'</div></div>';
   }
-  h+='</div>'; el.innerHTML=h;
+  h+='</div>';el.innerHTML=h;
 }
 
 function renderPlayers(){
-  var el=document.getElementById('tab-players'); var lb=getLeaderboard(); var h='';
-
-  if(loggedInPlayer && !isAdmin){
-    // Logged in player view - show own stats + logout
-    var s=null; for(var j=0;j<lb.length;j++){if(lb[j].id===loggedInPlayer.id){s=lb[j];break;}} if(!s)s={wins:0,losses:0,nobets:0,net:0};
-    var ns=s.net>0?'+₹'+s.net:(s.net<0?'−₹'+Math.abs(s.net):'₹0');
+  var el=document.getElementById('tab-players');var lb=getLeaderboard();var h='';
+  if(loggedInPlayer&&!isAdmin){
+    var s=null;for(var j=0;j<lb.length;j++){if(lb[j].id===loggedInPlayer.id){s=lb[j];break;}}if(!s)s={wins:0,losses:0,nobets:0,net:0};
+    var ns=s.net>0?'+\u20B9'+s.net:(s.net<0?'\u2212\u20B9'+Math.abs(s.net):'\u20B90');
     var nc=s.net>0?'np':(s.net<0?'nn':'nz');
     h+='<div style="background:var(--bg3);border:1px solid rgba(0,194,184,0.2);border-radius:var(--r);padding:16px;margin-bottom:14px">';
     h+='<div style="font-size:11px;color:var(--teal);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Logged in as</div>';
     h+='<div style="display:flex;align-items:center;gap:12px">';
     h+='<div class="ava" style="background:'+loggedInPlayer.color+'22;color:'+loggedInPlayer.color+'">'+loggedInPlayer.initials+'</div>';
     h+='<div style="flex:1"><div style="font-size:16px;font-weight:600;color:var(--text)">'+loggedInPlayer.name+'</div>';
-    h+='<div style="font-size:12px;color:var(--text3)">'+s.wins+'W · '+s.losses+'L · '+s.nobets+' No-bet</div></div>';
+    h+='<div style="font-size:12px;color:var(--text3)">'+s.wins+'W \u00B7 '+s.losses+'L \u00B7 '+s.nobets+' No-bet</div></div>';
     h+='<div class="'+nc+'" style="font-size:20px">'+ns+'</div></div>';
     h+='<button class="btn br bsm" style="margin-top:12px" onclick="logoutPlayer()">Logout from this device</button>';
     h+='</div>';
-  } else if(!isAdmin && !loggedInPlayer){
-    // Not logged in - show login box
-    h+='<div style="background:linear-gradient(135deg,rgba(0,194,184,0.07) 0%,rgba(0,194,184,0.02) 100%);border:1px solid rgba(0,194,184,0.25);border-radius:var(--r);padding:16px;margin-bottom:14px">';
+  } else if(!isAdmin&&!loggedInPlayer){
+    h+='<div class="join-box">';
     h+='<div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--teal);margin-bottom:4px">Player Login</div>';
     h+='<div style="font-size:12px;color:var(--text2);margin-bottom:12px">Enter the login code shared by your admin to identify yourself</div>';
     h+='<input class="inp" id="player-code-input" placeholder="e.g. AY291" style="margin-bottom:8px;text-transform:uppercase">';
@@ -575,21 +663,19 @@ function renderPlayers(){
     h+='<div style="font-size:11px;color:var(--text3);margin-top:10px">No code yet? Ask Amit Yadav or Amit Parihar to add you.</div>';
     h+='</div>';
   }
-
   if(isAdmin){
     h+='<div style="display:flex;gap:8px;margin-bottom:12px"><input class="inp" id="np-name" placeholder="Enter player name" style="flex:1"><button class="btn bp2" onclick="addPlayer()">+ Add</button></div>';
     h+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><span style="font-size:11px;color:var(--teal);background:rgba(0,194,184,0.08);border:1px solid rgba(0,194,184,0.2);border-radius:20px;padding:3px 10px">&#128273; Admin mode</span></div>';
   } else if(!loggedInPlayer){
     h+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="btn bo bsm" onclick="requireAdmin(function(){renderPlayers();})">&#128273; Admin login</button></div>';
   }
-
   if(!ST.participants.length){h+='<div class="empty">No players yet.</div>';el.innerHTML=h;attachPlayerInputHandlers(el);return;}
   h+='<div class="card" style="padding:12px 16px">';
   for(var i=0;i<ST.participants.length;i++){
-    var p=ST.participants[i]; var s=null;
+    var p=ST.participants[i];var s=null;
     for(var j=0;j<lb.length;j++){if(lb[j].id===p.id){s=lb[j];break;}}
     if(!s)s={wins:0,losses:0,nobets:0,net:0};
-    var ns=s.net>0?'+₹'+s.net:(s.net<0?'−₹'+Math.abs(s.net):'₹0');
+    var ns=s.net>0?'+\u20B9'+s.net:(s.net<0?'\u2212\u20B9'+Math.abs(s.net):'\u20B90');
     var nc=s.net>0?'np':(s.net<0?'nn':'nz');
     var codeTag=isAdmin?'<span style="font-size:10px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:monospace;margin-left:6px">'+(p.code||'no code')+'</span>':'';
     var rb=isAdmin?'<button data-pid="'+p.id+'" class="rm-btn" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:4px">&times;</button>':'';
@@ -597,11 +683,10 @@ function renderPlayers(){
     var meBadge=isMe?'<span style="font-size:10px;color:var(--teal);background:rgba(0,194,184,0.1);border:1px solid rgba(0,194,184,0.2);border-radius:20px;padding:1px 7px;margin-left:6px">You</span>':'';
     h+='<div class="lbr"><div class="ava" style="background:'+p.color+'22;color:'+p.color+'">'+p.initials+'</div>';
     h+='<div style="flex:1"><div style="font-size:14px;font-weight:500;color:var(--text)">'+p.name+meBadge+codeTag+'</div>';
-    h+='<div style="font-size:11px;color:var(--text3)">'+s.wins+'W · '+s.losses+'L · '+s.nobets+' No-bet</div></div>';
+    h+='<div style="font-size:11px;color:var(--text3)">'+s.wins+'W \u00B7 '+s.losses+'L \u00B7 '+s.nobets+' No-bet</div></div>';
     h+='<div class="'+nc+'" style="margin-right:'+(isAdmin?'10px':'0')+'">'+ns+'</div>'+rb+'</div>';
   }
-  h+='</div>';
-  el.innerHTML=h;
+  h+='</div>';el.innerHTML=h;
   attachPlayerInputHandlers(el);
 }
 
@@ -616,26 +701,18 @@ function attachPlayerInputHandlers(el){
 
 function loginWithCode(){
   var code=document.getElementById('player-code-input').value.trim().toUpperCase();
-  var errEl=document.getElementById('player-code-err');
-  errEl.textContent='';
+  var errEl=document.getElementById('player-code-err');errEl.textContent='';
   if(!code){errEl.textContent='Please enter your code.';return;}
   var found=null;
-  for(var i=0;i<ST.participants.length;i++){
-    if(ST.participants[i].code&&ST.participants[i].code.toUpperCase()===code){found=ST.participants[i];break;}
-  }
+  for(var i=0;i<ST.participants.length;i++){if(ST.participants[i].code&&ST.participants[i].code.toUpperCase()===code){found=ST.participants[i];break;}}
   if(!found){errEl.textContent='Invalid code. Check with your admin.';return;}
-  loggedInPlayer=found;
-  localStorage.setItem('ipl_player_code',found.code);
-  renderAll();
+  loggedInPlayer=found;localStorage.setItem('ipl_player_code',found.code);renderAll();
 }
 
 function logoutPlayer(){
   if(!confirm('Logout from this device?'))return;
-  loggedInPlayer=null;
-  localStorage.removeItem('ipl_player_code');
-  renderAll();
+  loggedInPlayer=null;localStorage.removeItem('ipl_player_code');renderAll();
 }
-
 
 function renderAdmin(){
   var el=document.getElementById('tab-admin');
@@ -650,17 +727,17 @@ function renderAdmin(){
   '</div>'+
   '<div class="card" style="margin-top:4px">'+
     '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">Player login codes</div>'+
-    '<div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">Share these codes privately with each player on WhatsApp. They use it to login on their device.</div>'+
+    '<div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">Share these codes privately with each player on WhatsApp.</div>'+
     '<div id="codes-list" style="margin-bottom:12px">'+getCodesHtml()+'</div>'+
     '<button class="btn bo bsm" onclick="generateMissingCodes()">Generate codes for players without one</button>'+
   '</div>'+
   '<div class="card" style="margin-top:4px">'+
     '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">Scoring rules</div>'+
     '<div style="font-size:13px;color:var(--text2);line-height:2.2">'+
-      '&#10003; Correct pick &rarr; <strong style="color:var(--green2)">+bet amount</strong> added to net score<br>'+
-      '&#10007; Wrong pick &rarr; <strong style="color:var(--red2)">-bet amount</strong> deducted from net score<br>'+
-      '&#128274; No bet placed &rarr; <strong style="color:var(--gold2)">-\u20B910</strong> auto-deducted<br>'+
-      '&#128196; All data lives in Google Sheet &rarr; open anytime to audit or fix a mistake'+
+      '&#10003; Correct pick &rarr; <strong style="color:var(--green2)">+bet amount</strong><br>'+
+      '&#10007; Wrong pick &rarr; <strong style="color:var(--red2)">-bet amount</strong><br>'+
+      '&#128274; No bet placed &rarr; <strong style="color:var(--gold2)">-\u20B910</strong><br>'+
+      '&#128196; All data lives in Google Sheet'+
     '</div>'+
   '</div>'+
   '<div style="text-align:center;padding:20px;font-size:11px;color:var(--text3)">Nutrabay IPL 2026 \u00B7 For fun only</div>';
@@ -668,91 +745,81 @@ function renderAdmin(){
 
 function genCode(name){
   var prefix=(name.trim().split(' ').map(function(w){return w[0]||'';}).join('')).toUpperCase().slice(0,2);
-  var num=Math.floor(100+Math.random()*900);
-  return prefix+num;
+  var num=Math.floor(100+Math.random()*900);return prefix+num;
 }
 function addPlayer(){
-  var inp=document.getElementById('np-name');
-  var name=inp.value.trim();
-  if(!name)return;
-  // Generate unique code
-  var code=genCode(name);
-  var existing=ST.participants.map(function(p){return p.code;});
+  var inp=document.getElementById('np-name');var name=inp.value.trim();if(!name)return;
+  var code=genCode(name);var existing=ST.participants.map(function(p){return p.code;});
   while(existing.indexOf(code)>-1){code=genCode(name);}
   var p={id:'p'+Date.now(),name:name,color:COLS[ST.participants.length%COLS.length],initials:ini(name),code:code};
-  ST.participants.push(p);
-  inp.value='';
-  saveToSheets().then(function(){
-    renderAll();
-    // Show code to admin so they can share with player
-    alert('Player added!\n\nName: '+name+'\nLogin code: '+code+'\n\nShare this code with '+name.split(' ')[0]+' on WhatsApp. They will use it to login.');
-  });
+  ST.participants.push(p);inp.value='';
+  saveToSheets().then(function(){renderAll();alert('Player added!\n\nName: '+name+'\nLogin code: '+code+'\n\nShare this code with '+name.split(' ')[0]+' on WhatsApp.');});
 }
-
 function removePlayer(id){if(!confirm('Remove this player?'))return;ST.participants=ST.participants.filter(function(p){return p.id!==id;});saveToSheets().then(function(){renderAll();});}
 
-function openBetModal(matchId){
+function openBetModal(matchId, editPid){
   var m=null;for(var i=0;i<MATCHES.length;i++){if(MATCHES[i].id===matchId){m=MATCHES[i];break;}}if(!m)return;
-
-  // If no one is logged in and not admin, prompt to login first
-  if(!loggedInPlayer && !isAdmin){
-    alert('Please login with your player code first.\n\nGo to the Players tab and enter your code.');
-    switchTab('players');
-    return;
-  }
-
-  activeBetMatch=m;selTeamIdx=null;betAmount=10;
-  document.getElementById('bm-title').textContent=m.t1+' vs '+m.t2;
-  document.getElementById('bm-sub').textContent='Match '+m.id+' · '+m.day+' '+fmtDate(m.date)+' · '+m.time;
-
-  // Show/hide player section based on who is opening
+  if(!loggedInPlayer&&!isAdmin){alert('Please login with your player code first.\n\nGo to the Players tab and enter your code.');switchTab('players');return;}
+  // Block if bet window closed (only for players, not admin)
+  if(!isAdmin&&!isBetOpen(m)){alert('Bets are closed for this match.\n\nBetting closes 30 minutes before the match starts.');return;}
+  activeBetMatch=m;activeBetEditPid=editPid||null;selTeamIdx=null;betAmount=10;
+  var isEdit=editPid&&ST.bets[matchId]&&ST.bets[matchId][editPid];
+  document.getElementById('bm-title').textContent=(isEdit?'Edit Bet':'Place Bet')+': '+m.t1+' vs '+m.t2;
+  document.getElementById('bm-sub').textContent='Match '+m.id+' \u00B7 '+m.day+' '+fmtDate(m.date)+' \u00B7 '+m.time;
+  document.getElementById('bm-confirm-btn').textContent=isEdit?'Update Bet':'Confirm Bet';
   var playerSection=document.getElementById('bm-player-section');
   var adminSection=document.getElementById('bm-admin-section');
+  var sel=document.getElementById('bm-player-admin');
   if(isAdmin){
-    playerSection.style.display='none';
-    adminSection.style.display='block';
-    var sel=document.getElementById('bm-player-admin');sel.innerHTML='';
-    for(var i=0;i<ST.participants.length;i++){var opt=document.createElement('option');opt.value=ST.participants[i].id;opt.textContent=ST.participants[i].name;sel.appendChild(opt);}
+    playerSection.style.display='none';adminSection.style.display='block';
+    sel.innerHTML='';sel.disabled=!!editPid;
+    for(var i=0;i<ST.participants.length;i++){
+      var opt=document.createElement('option');opt.value=ST.participants[i].id;opt.textContent=ST.participants[i].name;
+      if(ST.participants[i].id===editPid)opt.selected=true;
+      sel.appendChild(opt);
+    }
   } else {
-    playerSection.style.display='block';
-    adminSection.style.display='none';
+    playerSection.style.display='block';adminSection.style.display='none';
     document.getElementById('bm-player-display').textContent=loggedInPlayer.name;
   }
-
   document.getElementById('bm-player-err').textContent='';
   document.getElementById('bm-t1n').textContent=m.t1;document.getElementById('bm-t1f').textContent=TF[m.t1]||'';
   document.getElementById('bm-t2n').textContent=m.t2;document.getElementById('bm-t2f').textContent=TF[m.t2]||'';
-  document.getElementById('bm-t1').className='tp';document.getElementById('bm-t2').className='tp';
-  document.getElementById('bm-amt').textContent='₹10';
+  if(isEdit){
+    var existing=ST.bets[matchId][editPid];betAmount=existing.amount;
+    var tidx=existing.team===m.t1?0:1;selTeamIdx=tidx;
+    document.getElementById('bm-t1').className='tp'+(tidx===0?' sel':'');
+    document.getElementById('bm-t2').className='tp'+(tidx===1?' sel':'');
+  } else {
+    document.getElementById('bm-t1').className='tp';document.getElementById('bm-t2').className='tp';
+  }
+  document.getElementById('bm-amt').textContent='\u20B9'+betAmount;
   document.getElementById('bet-modal').classList.add('open');
 }
-function closeBetModal(){document.getElementById('bet-modal').classList.remove('open');activeBetMatch=null;}
+function closeBetModal(){document.getElementById('bet-modal').classList.remove('open');activeBetMatch=null;activeBetEditPid=null;document.getElementById('bm-player-admin').disabled=false;}
 function selTeam(i){selTeamIdx=i;document.getElementById('bm-t1').className='tp'+(i===0?' sel':'');document.getElementById('bm-t2').className='tp'+(i===1?' sel':'');}
 function chgAmt(d){betAmount=Math.max(10,betAmount+d);document.getElementById('bm-amt').textContent='\u20B9'+betAmount;}
+
 function submitBet(){
-  var errEl=document.getElementById('bm-player-err');
-  errEl.textContent='';
+  var errEl=document.getElementById('bm-player-err');errEl.textContent='';
   if(selTeamIdx===null){errEl.textContent='Please pick a team.';return;}
-
   var pid='';
-  if(isAdmin){
-    // Admin uses dropdown
-    pid=document.getElementById('bm-player-admin').value;
-  } else {
-    // Logged-in player — use their own ID
-    if(!loggedInPlayer){errEl.textContent='Please login first.';return;}
-    pid=loggedInPlayer.id;
+  if(isAdmin){pid=document.getElementById('bm-player-admin').value;}
+  else{if(!loggedInPlayer){errEl.textContent='Please login first.';return;}pid=loggedInPlayer.id;}
+  // Only block duplicate if it's a NEW bet (not editing)
+  if(!activeBetEditPid&&ST.bets[activeBetMatch.id]&&ST.bets[activeBetMatch.id][pid]){
+    errEl.textContent='This player already has a bet. Use the edit button to change it.';return;
   }
-
-  // Check duplicate bet
-  if(ST.bets[activeBetMatch.id]&&ST.bets[activeBetMatch.id][pid]){
-    errEl.textContent='This player already placed a bet for this match!';return;
-  }
-
   if(!ST.bets[activeBetMatch.id])ST.bets[activeBetMatch.id]={};
   ST.bets[activeBetMatch.id][pid]={team:(selTeamIdx===0?activeBetMatch.t1:activeBetMatch.t2),amount:betAmount};
-  closeBetModal();
-  saveToSheets().then(function(){renderAll();});
+  closeBetModal();saveToSheets().then(function(){renderAll();});
+}
+
+function adminEditBet(matchId,pid){openBetModal(matchId,pid);}
+function adminDeleteBet(matchId,pid){
+  var pname='';for(var i=0;i<ST.participants.length;i++){if(ST.participants[i].id===pid){pname=ST.participants[i].name;break;}}
+  if(!confirm('Remove bet for '+pname+'?'))return;
+  if(ST.bets[matchId]&&ST.bets[matchId][pid]){delete ST.bets[matchId][pid];saveToSheets().then(function(){renderAll();});}
 }
 
 function openResultModal(matchId){
@@ -769,13 +836,11 @@ function closeResultModal(){document.getElementById('result-modal').classList.re
 function selWinner(i){selWinnerIdx=i;document.getElementById('rm-t1').className='tp'+(i===0?' sel':'');document.getElementById('rm-t2').className='tp'+(i===1?' sel':'');}
 function submitResult(){
   if(selWinnerIdx===null){alert('Please select the winning team!');return;}
-  var m=activeResultMatch; var winner=selWinnerIdx===0?m.t1:m.t2;
-  ST.results[m.id]=winner;
-  closeResultModal();
+  var m=activeResultMatch;var winner=selWinnerIdx===0?m.t1:m.t2;
+  ST.results[m.id]=winner;closeResultModal();
   saveToSheets().then(function(){
     renderAll();
-    var mb=ST.bets[m.id]||{};
-    var wins=[],losses=[],nobets=[];
+    var mb=ST.bets[m.id]||{};var wins=[],losses=[],nobets=[];
     for(var i=0;i<ST.participants.length;i++){var p=ST.participants[i];var b=mb[p.id];if(!b)nobets.push(p.name+' (-\u20B910)');else if(b.team===winner)wins.push(p.name+' (+\u20B9'+b.amount+')');else losses.push(p.name+' (-\u20B9'+b.amount+')');}
     var msg='Match '+m.id+': '+m.t1+' vs '+m.t2+'\nWinner: '+winner+'\n\n';
     if(wins.length)msg+='\u2705 Winners:\n'+wins.join('\n')+'\n\n';
@@ -790,7 +855,7 @@ function getCodesHtml(){
   var h='';
   for(var i=0;i<ST.participants.length;i++){
     var p=ST.participants[i];
-    var code=p.code||'<span style="color:var(--gold2)">no code - click button below</span>';
+    var code=p.code||'<span style="color:var(--gold2)">no code</span>';
     h+='<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">';
     h+='<div class="ava" style="background:'+p.color+'22;color:'+p.color+';width:28px;height:28px;font-size:11px">'+p.initials+'</div>';
     h+='<div style="flex:1;font-size:13px;color:var(--text)">'+p.name+'</div>';
@@ -799,20 +864,17 @@ function getCodesHtml(){
   }
   return h;
 }
-
 function generateMissingCodes(){
   var changed=false;
   for(var i=0;i<ST.participants.length;i++){
     if(!ST.participants[i].code){
-      var code=genCode(ST.participants[i].name);
-      var existing=ST.participants.map(function(p){return p.code;});
+      var code=genCode(ST.participants[i].name);var existing=ST.participants.map(function(p){return p.code;});
       while(existing.indexOf(code)>-1){code=genCode(ST.participants[i].name);}
-      ST.participants[i].code=code;
-      changed=true;
+      ST.participants[i].code=code;changed=true;
     }
   }
   if(!changed){alert('All players already have login codes.');return;}
-  saveToSheets().then(function(){renderAdmin();alert('Codes generated! Share them with players from the codes list above.');});
+  saveToSheets().then(function(){renderAdmin();alert('Codes generated!');});
 }
 
 function exportData(){var a=document.createElement('a');a.href='data:text/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(ST,null,2));a.download='nutrabay_ipl2026_backup.json';a.click();}
