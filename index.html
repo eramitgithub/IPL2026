@@ -372,19 +372,27 @@ function todayStr(){return new Date().toISOString().split('T')[0];}
 function fmtDate(d){var p=d.slice(5).split('-');return p[1]+'/'+p[0];}
 function ini(n){var p=n.trim().split(' ');return ((p[0][0]||'')+(p[1]?p[1][0]:(p[0][1]||''))).toUpperCase();}
 function totalPool(){var s=0;var mk=Object.keys(ST.bets);for(var i=0;i<mk.length;i++){var mb=ST.bets[mk[i]];var pk=Object.keys(mb);for(var j=0;j<pk.length;j++)s+=mb[pk[j]].amount;}return s;}
-function isBetOpen(m){
-  // Returns true if current time is more than 30 min before match start
-  var now=new Date();
-  // Parse match date + time
+function parseMatchTime(m){
   var parts=m.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
-  if(!parts)return false;
+  if(!parts)return null;
   var h=parseInt(parts[1]);var mn=parseInt(parts[2]);var ampm=parts[3].toUpperCase();
   if(ampm==='PM'&&h!==12)h+=12;
   if(ampm==='AM'&&h===12)h=0;
   var dp=m.date.split('-');
-  var matchTime=new Date(parseInt(dp[0]),parseInt(dp[1])-1,parseInt(dp[2]),h,mn,0,0);
-  var cutoff=new Date(matchTime.getTime()-30*60*1000); // 30 min before
-  return now<cutoff;
+  return new Date(parseInt(dp[0]),parseInt(dp[1])-1,parseInt(dp[2]),h,mn,0,0);
+}
+function isBetOpen(m){
+  // Returns true if current time is more than 30 min before match start
+  var matchTime=parseMatchTime(m);
+  if(!matchTime)return false;
+  var cutoff=new Date(matchTime.getTime()-30*60*1000);
+  return new Date()<cutoff;
+}
+function isMatchStarted(m){
+  // Returns true if current time has passed match start time
+  var matchTime=parseMatchTime(m);
+  if(!matchTime)return false;
+  return new Date()>=matchTime;
 }
 function betCutoffStr(m){
   var parts=m.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
@@ -402,12 +410,15 @@ function getStatus(m){var t=todayStr();if(ST.results[m.id])return 'done';if(m.da
 
 function getLeaderboard(){
   var sc={};
-  for(var i=0;i<ST.participants.length;i++){var p=ST.participants[i];sc[p.id]={id:p.id,name:p.name,color:p.color,initials:p.initials,wins:0,losses:0,nobets:0,net:0};}
+  for(var i=0;i<ST.participants.length;i++){var p=ST.participants[i];sc[p.id]={id:p.id,name:p.name,color:p.color,initials:p.initials,wins:0,losses:0,nobets:0,net:0,joined:p.joined||'2026-01-01'};}
   for(var mi=0;mi<MATCHES.length;mi++){
     var m=MATCHES[mi];if(!ST.results[m.id])continue;
     var winner=ST.results[m.id];var mb=ST.bets[m.id]||{};
     for(var pi=0;pi<ST.participants.length;pi++){
       var pp=ST.participants[pi];if(!sc[pp.id])continue;
+      // Skip matches that happened before the player joined
+      var joinedDate=pp.joined||'2026-01-01';
+      if(m.date<joinedDate)continue;
       var bet=mb[pp.id];
       if(!bet){sc[pp.id].net-=10;sc[pp.id].nobets++;sc[pp.id].losses++;}
       else if(bet.team===winner){sc[pp.id].net+=bet.amount;sc[pp.id].wins++;}
@@ -456,6 +467,15 @@ function saveSetup(){
 function startApp(){
   var savedCode=localStorage.getItem('ipl_player_code');
   loadFromSheets().then(function(){
+    // Backfill joined date for players added before this update
+    var needsSave=false;
+    for(var i=0;i<ST.participants.length;i++){
+      if(!ST.participants[i].joined){
+        ST.participants[i].joined=todayStr();
+        needsSave=true;
+      }
+    }
+    if(needsSave){saveToSheets();}
     if(savedCode){for(var i=0;i<ST.participants.length;i++){if(ST.participants[i].code&&ST.participants[i].code===savedCode){loggedInPlayer=ST.participants[i];break;}}}
     renderAll();
     setInterval(function(){loadFromSheets().then(function(){if(loggedInPlayer){for(var i=0;i<ST.participants.length;i++){if(ST.participants[i].id===loggedInPlayer.id){loggedInPlayer=ST.participants[i];break;}}}renderAll();});},300000);
@@ -535,18 +555,25 @@ function matchCard(m){
     }
     chips+='</div>';
   }
-  var canBet=(st==='upcoming'||st==='live')&&ST.participants.length>0&&isBetOpen(m);
   var canResult=st==='pending';
-  var betBtn=canBet?'<button class="btn bgold bsm" onclick="openBetModal('+m.id+', null)">+ Bet</button>':'';
+  var betBtn='';
+  if(st==='live'&&ST.participants.length>0){
+    if(isMatchStarted(m)){betBtn='<span style="font-size:11px;color:var(--gold2);background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.2);border-radius:var(--rs);padding:5px 10px">&#127951; Started</span>';}
+    else if(isBetOpen(m)){betBtn='<button class="btn bgold bsm" onclick="openBetModal('+m.id+', null)">+ Bet</button>';}
+  }
   var resBtn=canResult?(isAdmin?'<button class="btn bo bsm" onclick="openResultModal('+m.id+')">Result</button>':'<span style="font-size:18px;color:var(--text3);padding:4px" title="Admin only">&#128274;</span>'):'';
   var wBanner=result?'<div class="wb">&#127942; '+result+' won</div>':'';
   var poolLine=pool>0?'<div style="font-size:11px;color:var(--text3);margin-top:4px">Pool: \u20B9'+pool+' \u00B7 '+bpids.length+' bet'+(bpids.length!==1?'s':'')+'</div>':'';
   var cutoffLine='';
   if(st==='upcoming'||st==='live'){
-    var open=isBetOpen(m);
-    var ctime=betCutoffStr(m);
-    if(open){cutoffLine='<div style="font-size:11px;color:var(--teal);margin-top:4px">&#9201; Bets close at '+ctime+'</div>';}
-    else{cutoffLine='<div style="font-size:11px;color:var(--red2);margin-top:4px">&#128274; Bets closed (match within 30 min)</div>';}
+    if(isMatchStarted(m)){
+      cutoffLine='<div style="font-size:11px;color:var(--gold2);margin-top:4px">&#127951; Match has started</div>';
+    } else if(isBetOpen(m)){
+      var ctime=betCutoffStr(m);
+      cutoffLine='<div style="font-size:11px;color:var(--teal);margin-top:4px">&#9201; Bets close at '+ctime+'</div>';
+    } else {
+      cutoffLine='<div style="font-size:11px;color:var(--red2);margin-top:4px">&#128274; Bets closed</div>';
+    }
   }
   return '<div class="mc '+(st==='live'?'today':'')+' '+(st==='done'?'done':'')+'">'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'+
@@ -633,7 +660,8 @@ function renderLeaderboard(){
     var p=lb[i];var rc=i===0?'r1':(i===1?'r2':(i===2?'r3':'rn'));
     var nc=p.net>0?'np':(p.net<0?'nn':'nz');
     var ns=p.net>0?'+\u20B9'+p.net:(p.net<0?'\u2212\u20B9'+Math.abs(p.net):'\u20B90');
-    h+='<div class="lbr"><div class="rank '+rc+'">'+(i+1)+'</div><div class="ava" style="background:'+p.color+'22;color:'+p.color+'">'+p.initials+'</div><div style="flex:1"><div style="font-size:14px;font-weight:500;color:var(--text)">'+p.name+'</div><div style="font-size:11px;color:var(--text3)">'+p.wins+'W \u00B7 '+p.losses+'L \u00B7 '+p.nobets+' No-bet</div></div><div class="'+nc+'">'+ns+'</div></div>';
+    var joinedTag=p.joined&&p.joined!=='2026-01-01'?' \u00B7 from '+fmtDate(p.joined):'';
+    h+='<div class="lbr"><div class="rank '+rc+'">'+(i+1)+'</div><div class="ava" style="background:'+p.color+'22;color:'+p.color+'">'+p.initials+'</div><div style="flex:1"><div style="font-size:14px;font-weight:500;color:var(--text)">'+p.name+'</div><div style="font-size:11px;color:var(--text3)">'+p.wins+'W \u00B7 '+p.losses+'L \u00B7 '+p.nobets+' No-bet'+joinedTag+'</div></div><div class="'+nc+'">'+ns+'</div></div>';
   }
   h+='</div>';el.innerHTML=h;
 }
@@ -751,7 +779,7 @@ function addPlayer(){
   var inp=document.getElementById('np-name');var name=inp.value.trim();if(!name)return;
   var code=genCode(name);var existing=ST.participants.map(function(p){return p.code;});
   while(existing.indexOf(code)>-1){code=genCode(name);}
-  var p={id:'p'+Date.now(),name:name,color:COLS[ST.participants.length%COLS.length],initials:ini(name),code:code};
+  var p={id:'p'+Date.now(),name:name,color:COLS[ST.participants.length%COLS.length],initials:ini(name),code:code,joined:todayStr()};
   ST.participants.push(p);inp.value='';
   saveToSheets().then(function(){renderAll();alert('Player added!\n\nName: '+name+'\nLogin code: '+code+'\n\nShare this code with '+name.split(' ')[0]+' on WhatsApp.');});
 }
@@ -760,6 +788,8 @@ function removePlayer(id){if(!confirm('Remove this player?'))return;ST.participa
 function openBetModal(matchId, editPid){
   var m=null;for(var i=0;i<MATCHES.length;i++){if(MATCHES[i].id===matchId){m=MATCHES[i];break;}}if(!m)return;
   if(!loggedInPlayer&&!isAdmin){alert('Please login with your player code first.\n\nGo to the Players tab and enter your code.');switchTab('players');return;}
+  // Block non-today matches for players
+  if(!isAdmin&&m.date!==todayStr()){alert('Betting is only open for today\'s matches.');return;}
   // Block if bet window closed (only for players, not admin)
   if(!isAdmin&&!isBetOpen(m)){alert('Bets are closed for this match.\n\nBetting closes 30 minutes before the match starts.');return;}
   activeBetMatch=m;activeBetEditPid=editPid||null;selTeamIdx=null;betAmount=10;
