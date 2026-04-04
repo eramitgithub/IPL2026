@@ -590,7 +590,7 @@ function matchCard(m){
     }
     chips+='</div>';
   }
-  var canResult=st==='pending';
+  var canResult=st==='pending'||(st==='live'&&isMatchStarted(m));
   var betBtn='';
   if(st==='live'&&ST.participants.length>0){
     if(isMatchStarted(m)){betBtn='<span style="font-size:11px;color:var(--gold2);background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.2);border-radius:var(--rs);padding:5px 10px">&#127951; Started</span>';}
