@@ -356,7 +356,7 @@ var MATCHES = [
   {id:70,t1:'RCB',t2:'RR',date:'2026-05-22',day:'Fri',time:'7:30 PM',venue:'M. Chinnaswamy Stadium, Bengaluru'}
 ];
 
-var ST = {participants:[],bets:{},results:{}};
+var ST = {participants:[],bets:{},results:{},config:{wa1:'',wa1name:'Amit Yadav',wa2:'',wa2name:'Amit Parihar'}};
 var isAdmin = false;
 var loggedInPlayer = null;
 var pinBuf = '';
@@ -444,13 +444,13 @@ function loadFromSheets(force){
   setSyncMsg('Syncing with Google Sheets...');
   return gsFetch().then(function(res){
     if(res.error)throw new Error(res.error);
-    var d=res.data||{};ST.participants=d.participants||[];ST.bets=d.bets||{};ST.results=d.results||{};
+    var d=res.data||{};ST.participants=d.participants||[];ST.bets=d.bets||{};ST.results=d.results||{};ST.config=d.config||{wa1:'',wa1name:'Amit Yadav',wa2:'',wa2name:'Amit Parihar'};
     lastFetchTime=Date.now();setSyncOk('Synced '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
   }).catch(function(e){setSyncErr('Sync failed: '+e.message);});
 }
 
 function saveToSheets(){
-  return gsPost({action:'writeAll',data:{participants:ST.participants,bets:ST.bets,results:ST.results}})
+  return gsPost({action:'writeAll',data:{participants:ST.participants,bets:ST.bets,results:ST.results,config:ST.config}})
     .then(function(res){if(res.error)throw new Error(res.error);lastFetchTime=0;setSyncOk('Saved '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));})
     .catch(function(e){setSyncErr('Save failed: '+e.message);});
 }
@@ -688,7 +688,20 @@ function renderPlayers(){
     h+='<input class="inp" id="player-code-input" placeholder="e.g. AY291" style="margin-bottom:8px;text-transform:uppercase">';
     h+='<div id="player-code-err" style="font-size:11px;color:var(--red2);min-height:16px;margin-bottom:8px"></div>';
     h+='<button class="btn bp2" style="width:100%" onclick="loginWithCode()">Login</button>';
-    h+='<div style="font-size:11px;color:var(--text3);margin-top:10px">No code yet? Ask Amit Yadav or Amit Parihar to add you.</div>';
+    // WhatsApp contact buttons
+    var cfg=ST.config||{};
+    var n1=cfg.wa1name||'Amit Yadav';
+    var n2=cfg.wa2name||'Amit Parihar';
+    var waMsg=encodeURIComponent('Hi, I want to join the Nutrabay IPL 2026 betting pool. Please add me.');
+    var btn1='',btn2='';
+    if(cfg.wa1){btn1='<a href="https://wa.me/91'+cfg.wa1+'?text='+waMsg+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.3);border-radius:var(--rs);padding:8px 14px;font-size:12px;font-weight:500;color:#4ade80;text-decoration:none;margin-right:8px">&#128172; '+n1+'</a>';}
+    else{btn1='<span style="font-size:12px;color:var(--text3)">'+n1+'</span> ';}
+    if(cfg.wa2){btn2='<a href="https://wa.me/91'+cfg.wa2+'?text='+waMsg+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.3);border-radius:var(--rs);padding:8px 14px;font-size:12px;font-weight:500;color:#4ade80;text-decoration:none">&#128172; '+n2+'</a>';}
+    else{btn2='<span style="font-size:12px;color:var(--text3)">'+n2+'</span>';}
+    h+='<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">';
+    h+='<div style="font-size:11px;color:var(--text3);margin-bottom:8px">No code yet? Request to join:</div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:8px">'+btn1+btn2+'</div>';
+    h+='</div>';
     h+='</div>';
   }
   if(isAdmin){
@@ -752,6 +765,13 @@ function renderAdmin(){
     '<div class="adrow"><div><div style="color:var(--text);font-size:14px">Import backup</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Restore from JSON file</div></div><button class="btn bo bsm" onclick="importData()">&#8593; Import</button></div>'+
     '<div class="adrow"><div><div style="color:var(--text);font-size:14px">Change Apps Script URL</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Switch to a different sheet</div></div><button class="btn bo bsm" onclick="changeUrl()">Edit</button></div>'+
     '<div class="adrow" style="border-bottom:none"><div><div style="color:var(--red2);font-size:14px">Reset all data</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Wipes all players, bets and results</div></div><button class="btn br bsm" onclick="resetAll()">Reset</button></div>'+
+  '</div>'+
+  '<div class="card" style="margin-top:4px">'+
+    '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">WhatsApp contact settings</div>'+
+    '<div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">These numbers appear as WhatsApp buttons on the player login screen for new members to request joining.</div>'+
+    '<div style="margin-bottom:10px"><div class="lbl">Contact 1 name</div><input class="inp" id="cfg-n1" value="'+(ST.config.wa1name||'Amit Yadav')+'" style="margin-bottom:6px"><div class="lbl" style="margin-top:8px">Contact 1 WhatsApp number (10 digits, no +91)</div><input class="inp" id="cfg-w1" value="'+(ST.config.wa1||'')+'" placeholder="e.g. 9876543210"></div>'+
+    '<div style="margin-bottom:14px"><div class="lbl">Contact 2 name</div><input class="inp" id="cfg-n2" value="'+(ST.config.wa2name||'Amit Parihar')+'" style="margin-bottom:6px"><div class="lbl" style="margin-top:8px">Contact 2 WhatsApp number (10 digits, no +91)</div><input class="inp" id="cfg-w2" value="'+(ST.config.wa2||'')+'" placeholder="e.g. 9876543210"></div>'+
+    '<button class="btn bp2 bsm" onclick="saveWaConfig()">Save WhatsApp settings</button>'+
   '</div>'+
   '<div class="card" style="margin-top:4px">'+
     '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">Player login codes</div>'+
@@ -907,6 +927,16 @@ function generateMissingCodes(){
   saveToSheets().then(function(){renderAdmin();alert('Codes generated!');});
 }
 
+function saveWaConfig(){
+  var n1=document.getElementById('cfg-n1').value.trim();
+  var w1=document.getElementById('cfg-w1').value.trim().replace(/\D/g,'');
+  var n2=document.getElementById('cfg-n2').value.trim();
+  var w2=document.getElementById('cfg-w2').value.trim().replace(/\D/g,'');
+  if(w1&&w1.length!==10){alert('Contact 1 number must be 10 digits');return;}
+  if(w2&&w2.length!==10){alert('Contact 2 number must be 10 digits');return;}
+  ST.config={wa1:w1,wa1name:n1||'Amit Yadav',wa2:w2,wa2name:n2||'Amit Parihar'};
+  saveToSheets().then(function(){alert('WhatsApp settings saved!');});
+}
 function exportData(){var a=document.createElement('a');a.href='data:text/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(ST,null,2));a.download='nutrabay_ipl2026_backup.json';a.click();}
 function importData(){var inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=function(e){var reader=new FileReader();reader.onload=function(ev){try{ST=JSON.parse(ev.target.result);saveToSheets().then(function(){renderAll();alert('Imported!');});}catch(err){alert('Invalid file.');}};reader.readAsText(e.target.files[0]);};inp.click();}
 function changeUrl(){localStorage.removeItem('ipl_gs_url');location.reload();}
