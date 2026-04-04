@@ -419,8 +419,22 @@ function getLeaderboard(){
       // Skip matches that happened before the player joined
       var joinedDate=pp.joined||'2026-01-01';
       if(m.date<joinedDate)continue;
+      // Skip no-bet penalty if player joined after match start time
       var bet=mb[pp.id];
-      if(!bet){sc[pp.id].net-=10;sc[pp.id].nobets++;sc[pp.id].losses++;}
+      if(!bet){
+        // Only penalize if player had a chance to bet:
+        // They must have joined before the bet cutoff (match start - 30 min)
+        var mTime=parseMatchTime(m);
+        var hadChance=false;
+        if(mTime&&pp.joinedTs){
+          var cutoff=new Date(mTime.getTime()-30*60*1000);
+          hadChance=(pp.joinedTs<=cutoff.getTime());
+        } else if(!pp.joinedTs){
+          // Old player with no joinedTs — only penalize if different day (joined before match day)
+          hadChance=(m.date>joinedDate);
+        }
+        if(hadChance){sc[pp.id].net-=10;sc[pp.id].nobets++;sc[pp.id].losses++;}
+      }
       else if(bet.team===winner){sc[pp.id].net+=bet.amount;sc[pp.id].wins++;}
       else{sc[pp.id].net-=bet.amount;sc[pp.id].losses++;}
     }
@@ -467,11 +481,14 @@ function saveSetup(){
 function startApp(){
   var savedCode=localStorage.getItem('ipl_player_code');
   loadFromSheets().then(function(){
-    // Backfill joined date for players added before this update
+    // Backfill joined date and joinedTs for players added before this update
     var needsSave=false;
     for(var i=0;i<ST.participants.length;i++){
       if(!ST.participants[i].joined){
         ST.participants[i].joined=todayStr();
+        // Set joinedTs to start of today so they are NOT penalized for today's matches
+        // (since we don't know exactly when they were added)
+        ST.participants[i].joinedTs=new Date(todayStr()+'T00:00:00').getTime();
         needsSave=true;
       }
     }
@@ -799,7 +816,7 @@ function addPlayer(){
   var inp=document.getElementById('np-name');var name=inp.value.trim();if(!name)return;
   var code=genCode(name);var existing=ST.participants.map(function(p){return p.code;});
   while(existing.indexOf(code)>-1){code=genCode(name);}
-  var p={id:'p'+Date.now(),name:name,color:COLS[ST.participants.length%COLS.length],initials:ini(name),code:code,joined:todayStr()};
+  var ts=Date.now();var p={id:'p'+ts,name:name,color:COLS[ST.participants.length%COLS.length],initials:ini(name),code:code,joined:todayStr(),joinedTs:ts};
   ST.participants.push(p);inp.value='';
   saveToSheets().then(function(){renderAll();alert('Player added!\n\nName: '+name+'\nLogin code: '+code+'\n\nShare this code with '+name.split(' ')[0]+' on WhatsApp.');});
 }
