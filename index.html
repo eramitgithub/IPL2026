@@ -191,6 +191,7 @@ select.inp{cursor:pointer}
     <div class="logo"><span class="lnb">NUTRABAY</span><span class="lipl">IPL <span>2026</span></span></div>
     <div class="hright">
       <div class="ppill">Pool <strong id="hpool">&#8377;0</strong></div>
+      <div id="player-badge" style="display:none;background:rgba(0,194,184,0.1);border:1px solid rgba(0,194,184,0.25);border-radius:20px;padding:4px 12px;font-size:11px;color:var(--teal);font-weight:600;cursor:pointer" onclick="switchTab('players')">&#128100; <span id="player-badge-name"></span></div>
       <div class="abadge" id="abadge" onclick="logoutAdmin()">&#128273; Admin</div>
     </div>
   </div>
@@ -225,8 +226,17 @@ select.inp{cursor:pointer}
   <div class="modal">
     <div class="mt" id="bm-title">Place Bet</div>
     <div class="ms" id="bm-sub"></div>
-    <div class="lbl">Player name</div>
-    <select class="inp" id="bm-player" style="margin-bottom:18px"></select>
+    <!-- Player section: shown when logged-in player is betting -->
+    <div id="bm-player-section" style="margin-bottom:14px">
+      <div class="lbl">Betting as</div>
+      <div style="background:var(--bg3);border:1px solid rgba(0,194,184,0.2);border-radius:var(--rs);padding:10px 14px;font-size:14px;font-weight:500;color:var(--teal)" id="bm-player-display"></div>
+    </div>
+    <!-- Admin section: dropdown shown only for admin -->
+    <div id="bm-admin-section" style="margin-bottom:14px;display:none">
+      <div class="lbl">Betting for</div>
+      <select class="inp" id="bm-player-admin"></select>
+    </div>
+    <div id="bm-player-err" style="font-size:11px;color:var(--red2);min-height:16px;margin-bottom:4px"></div>
     <div class="lbl">Pick your team</div>
     <div class="tpr">
       <div class="tp" id="bm-t1" onclick="selTeam(0)"><span id="bm-t1n">-</span><span class="tpsub" id="bm-t1f"></span></div>
@@ -269,7 +279,7 @@ select.inp{cursor:pointer}
 </div>
 
 <script>
-var ADMIN_PIN = '2611';
+var ADMIN_PIN = '2@26';
 var SCRIPT_URL = '';
 var TC = {RCB:'#dc2626',CSK:'#d97706',MI:'#2563eb',KKR:'#7c3aed',RR:'#db2777',GT:'#059669',DC:'#0ea5e9',SRH:'#ea580c',LSG:'#65a30d',PBKS:'#e11d48'};
 var TF = {RCB:'Royal Challengers Bengaluru',CSK:'Chennai Super Kings',MI:'Mumbai Indians',KKR:'Kolkata Knight Riders',RR:'Rajasthan Royals',GT:'Gujarat Titans',DC:'Delhi Capitals',SRH:'Sunrisers Hyderabad',LSG:'Lucknow Super Giants',PBKS:'Punjab Kings'};
@@ -349,6 +359,7 @@ var MATCHES = [
 
 var ST = {participants:[],bets:{},results:{}};
 var isAdmin = false;
+var loggedInPlayer = null; // {id, name, code, color, initials}
 var pinBuf = '';
 var pinCb = null;
 var activeBetMatch = null;
@@ -427,7 +438,21 @@ function saveSetup(){
 }
 
 function startApp(){
-  loadFromSheets().then(function(){renderAll();setInterval(function(){loadFromSheets().then(function(){renderAll();});},300000);});
+  var savedCode=localStorage.getItem('ipl_player_code');
+  loadFromSheets().then(function(){
+    if(savedCode){
+      for(var i=0;i<ST.participants.length;i++){
+        if(ST.participants[i].code&&ST.participants[i].code===savedCode){loggedInPlayer=ST.participants[i];break;}
+      }
+    }
+    renderAll();
+    setInterval(function(){
+      loadFromSheets().then(function(){
+        if(loggedInPlayer){for(var i=0;i<ST.participants.length;i++){if(ST.participants[i].id===loggedInPlayer.id){loggedInPlayer=ST.participants[i];break;}}}
+        renderAll();
+      });
+    },300000);
+  });
 }
 
 function requireAdmin(cb){if(isAdmin){cb();return;} pinBuf='';pinCb=cb;document.getElementById('perr').textContent='';updateDots();document.getElementById('pmod').classList.add('open');}
@@ -439,6 +464,9 @@ function logoutAdmin(){if(!confirm('Lock admin?'))return;isAdmin=false;document.
 
 function renderAll(){
   document.getElementById('hpool').textContent='\u20B9'+totalPool();
+  var pb=document.getElementById('player-badge'); var pbn=document.getElementById('player-badge-name');
+  if(loggedInPlayer&&pb&&pbn){pb.style.display='flex';pbn.textContent=loggedInPlayer.name.split(' ')[0];}
+  else if(pb){pb.style.display='none';}
   var tabs=['matches','leaderboard','players','admin'];
   var allTabs=document.querySelectorAll('.tab'); var idx=0;
   for(var i=0;i<allTabs.length;i++){if(allTabs[i].classList.contains('active')){idx=i;break;}}
@@ -522,53 +550,92 @@ function renderLeaderboard(){
 function renderPlayers(){
   var el=document.getElementById('tab-players'); var lb=getLeaderboard(); var h='';
 
-  if(isAdmin){
-    // Admin view: add + remove players
-    h+='<div class="join-box">';
-    h+='<div style="font-size:11px;color:var(--teal);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Add player</div>';
-    h+='<div style="display:flex;gap:8px">';
-    h+='<input class="inp" id="np-name" placeholder="Enter player name" style="flex:1">';
-    h+='<button class="btn bp2" onclick="addPlayer()">+ Add</button>';
+  if(loggedInPlayer && !isAdmin){
+    // Logged in player view - show own stats + logout
+    var s=null; for(var j=0;j<lb.length;j++){if(lb[j].id===loggedInPlayer.id){s=lb[j];break;}} if(!s)s={wins:0,losses:0,nobets:0,net:0};
+    var ns=s.net>0?'+₹'+s.net:(s.net<0?'−₹'+Math.abs(s.net):'₹0');
+    var nc=s.net>0?'np':(s.net<0?'nn':'nz');
+    h+='<div style="background:var(--bg3);border:1px solid rgba(0,194,184,0.2);border-radius:var(--r);padding:16px;margin-bottom:14px">';
+    h+='<div style="font-size:11px;color:var(--teal);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Logged in as</div>';
+    h+='<div style="display:flex;align-items:center;gap:12px">';
+    h+='<div class="ava" style="background:'+loggedInPlayer.color+'22;color:'+loggedInPlayer.color+'">'+loggedInPlayer.initials+'</div>';
+    h+='<div style="flex:1"><div style="font-size:16px;font-weight:600;color:var(--text)">'+loggedInPlayer.name+'</div>';
+    h+='<div style="font-size:12px;color:var(--text3)">'+s.wins+'W · '+s.losses+'L · '+s.nobets+' No-bet</div></div>';
+    h+='<div class="'+nc+'" style="font-size:20px">'+ns+'</div></div>';
+    h+='<button class="btn br bsm" style="margin-top:12px" onclick="logoutPlayer()">Logout from this device</button>';
     h+='</div>';
-    h+='</div>';
-    h+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px">';
-    h+='<span style="font-size:11px;color:var(--teal);background:rgba(0,194,184,0.08);border:1px solid rgba(0,194,184,0.2);border-radius:20px;padding:3px 10px">&#128273; Admin mode</span>';
-    h+='</div>';
-  } else {
-    // Non-admin view: info box + unlock button
-    h+='<div class="join-box">';
-    h+='<div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px">Want to join the pool?</div>';
-    h+='<div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px">';
-    h+='Players are added by <strong style="color:var(--teal)">Amit Yadav</strong> or <strong style="color:var(--teal)">Amit Parihar</strong>.<br>';
-    h+='Send either of them a message on WhatsApp with your name and they will add you to the pool.';
-    h+='</div>';
-    h+='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">';
-    h+='<a href="https://wa.me/91XXXXXXXXXX" target="_blank" class="btn bp2 bsm">&#128172; Message Amit Yadav</a>';
-    h+='<a href="https://wa.me/91XXXXXXXXXX" target="_blank" class="btn bo bsm">&#128172; Message Amit Parihar</a>';
-    h+='</div>';
-    h+='</div>';
-    h+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px">';
-    h+='<button class="btn bo bsm" onclick="requireAdmin(function(){renderPlayers();})">&#128273; Admin login</button>';
+  } else if(!isAdmin && !loggedInPlayer){
+    // Not logged in - show login box
+    h+='<div style="background:linear-gradient(135deg,rgba(0,194,184,0.07) 0%,rgba(0,194,184,0.02) 100%);border:1px solid rgba(0,194,184,0.25);border-radius:var(--r);padding:16px;margin-bottom:14px">';
+    h+='<div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--teal);margin-bottom:4px">Player Login</div>';
+    h+='<div style="font-size:12px;color:var(--text2);margin-bottom:12px">Enter the login code shared by your admin to identify yourself</div>';
+    h+='<input class="inp" id="player-code-input" placeholder="e.g. AY291" style="margin-bottom:8px;text-transform:uppercase">';
+    h+='<div id="player-code-err" style="font-size:11px;color:var(--red2);min-height:16px;margin-bottom:8px"></div>';
+    h+='<button class="btn bp2" style="width:100%" onclick="loginWithCode()">Login</button>';
+    h+='<div style="font-size:11px;color:var(--text3);margin-top:10px">No code yet? Ask Amit Yadav or Amit Parihar to add you.</div>';
     h+='</div>';
   }
 
-  if(!ST.participants.length){h+='<div class="empty">No players yet.</div>';el.innerHTML=h;return;}
+  if(isAdmin){
+    h+='<div style="display:flex;gap:8px;margin-bottom:12px"><input class="inp" id="np-name" placeholder="Enter player name" style="flex:1"><button class="btn bp2" onclick="addPlayer()">+ Add</button></div>';
+    h+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><span style="font-size:11px;color:var(--teal);background:rgba(0,194,184,0.08);border:1px solid rgba(0,194,184,0.2);border-radius:20px;padding:3px 10px">&#128273; Admin mode</span></div>';
+  } else if(!loggedInPlayer){
+    h+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="btn bo bsm" onclick="requireAdmin(function(){renderPlayers();})">&#128273; Admin login</button></div>';
+  }
+
+  if(!ST.participants.length){h+='<div class="empty">No players yet.</div>';el.innerHTML=h;attachPlayerInputHandlers(el);return;}
   h+='<div class="card" style="padding:12px 16px">';
   for(var i=0;i<ST.participants.length;i++){
     var p=ST.participants[i]; var s=null;
     for(var j=0;j<lb.length;j++){if(lb[j].id===p.id){s=lb[j];break;}}
     if(!s)s={wins:0,losses:0,nobets:0,net:0};
-    var ns=s.net>0?'+\u20B9'+s.net:(s.net<0?'\u2212\u20B9'+Math.abs(s.net):'\u20B90');
+    var ns=s.net>0?'+₹'+s.net:(s.net<0?'−₹'+Math.abs(s.net):'₹0');
     var nc=s.net>0?'np':(s.net<0?'nn':'nz');
+    var codeTag=isAdmin?'<span style="font-size:10px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:monospace;margin-left:6px">'+(p.code||'no code')+'</span>':'';
     var rb=isAdmin?'<button data-pid="'+p.id+'" class="rm-btn" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:4px">&times;</button>':'';
-    h+='<div class="lbr"><div class="ava" style="background:'+p.color+'22;color:'+p.color+'">'+p.initials+'</div><div style="flex:1"><div style="font-size:14px;font-weight:500;color:var(--text)">'+p.name+'</div><div style="font-size:11px;color:var(--text3)">'+s.wins+'W \u00B7 '+s.losses+'L \u00B7 '+s.nobets+' No-bet</div></div><div class="'+nc+'" style="margin-right:'+(isAdmin?'10px':'0')+'">'+ns+'</div>'+rb+'</div>';
+    var isMe=loggedInPlayer&&loggedInPlayer.id===p.id;
+    var meBadge=isMe?'<span style="font-size:10px;color:var(--teal);background:rgba(0,194,184,0.1);border:1px solid rgba(0,194,184,0.2);border-radius:20px;padding:1px 7px;margin-left:6px">You</span>':'';
+    h+='<div class="lbr"><div class="ava" style="background:'+p.color+'22;color:'+p.color+'">'+p.initials+'</div>';
+    h+='<div style="flex:1"><div style="font-size:14px;font-weight:500;color:var(--text)">'+p.name+meBadge+codeTag+'</div>';
+    h+='<div style="font-size:11px;color:var(--text3)">'+s.wins+'W · '+s.losses+'L · '+s.nobets+' No-bet</div></div>';
+    h+='<div class="'+nc+'" style="margin-right:'+(isAdmin?'10px':'0')+'">'+ns+'</div>'+rb+'</div>';
   }
-  h+='</div>'; el.innerHTML=h;
+  h+='</div>';
+  el.innerHTML=h;
+  attachPlayerInputHandlers(el);
+}
+
+function attachPlayerInputHandlers(el){
   var ni=document.getElementById('np-name');
   if(ni)ni.addEventListener('keydown',function(e){if(e.key==='Enter')addPlayer();});
+  var ci=document.getElementById('player-code-input');
+  if(ci){ci.addEventListener('keydown',function(e){if(e.key==='Enter')loginWithCode();});ci.addEventListener('input',function(){this.value=this.value.toUpperCase();});}
   var rbs=el.querySelectorAll('.rm-btn');
   for(var i=0;i<rbs.length;i++){rbs[i].addEventListener('click',function(){removePlayer(this.getAttribute('data-pid'));});}
 }
+
+function loginWithCode(){
+  var code=document.getElementById('player-code-input').value.trim().toUpperCase();
+  var errEl=document.getElementById('player-code-err');
+  errEl.textContent='';
+  if(!code){errEl.textContent='Please enter your code.';return;}
+  var found=null;
+  for(var i=0;i<ST.participants.length;i++){
+    if(ST.participants[i].code&&ST.participants[i].code.toUpperCase()===code){found=ST.participants[i];break;}
+  }
+  if(!found){errEl.textContent='Invalid code. Check with your admin.';return;}
+  loggedInPlayer=found;
+  localStorage.setItem('ipl_player_code',found.code);
+  renderAll();
+}
+
+function logoutPlayer(){
+  if(!confirm('Logout from this device?'))return;
+  loggedInPlayer=null;
+  localStorage.removeItem('ipl_player_code');
+  renderAll();
+}
+
 
 function renderAdmin(){
   var el=document.getElementById('tab-admin');
@@ -582,6 +649,12 @@ function renderAdmin(){
     '<div class="adrow" style="border-bottom:none"><div><div style="color:var(--red2);font-size:14px">Reset all data</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Wipes all players, bets and results</div></div><button class="btn br bsm" onclick="resetAll()">Reset</button></div>'+
   '</div>'+
   '<div class="card" style="margin-top:4px">'+
+    '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">Player login codes</div>'+
+    '<div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">Share these codes privately with each player on WhatsApp. They use it to login on their device.</div>'+
+    '<div id="codes-list" style="margin-bottom:12px">'+getCodesHtml()+'</div>'+
+    '<button class="btn bo bsm" onclick="generateMissingCodes()">Generate codes for players without one</button>'+
+  '</div>'+
+  '<div class="card" style="margin-top:4px">'+
     '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">Scoring rules</div>'+
     '<div style="font-size:13px;color:var(--text2);line-height:2.2">'+
       '&#10003; Correct pick &rarr; <strong style="color:var(--green2)">+bet amount</strong> added to net score<br>'+
@@ -593,33 +666,93 @@ function renderAdmin(){
   '<div style="text-align:center;padding:20px;font-size:11px;color:var(--text3)">Nutrabay IPL 2026 \u00B7 For fun only</div>';
 }
 
-function addPlayer(){var inp=document.getElementById('np-name');var name=inp.value.trim();if(!name)return;ST.participants.push({id:'p'+Date.now(),name:name,color:COLS[ST.participants.length%COLS.length],initials:ini(name)});inp.value='';saveToSheets().then(function(){renderAll();});}
+function genCode(name){
+  var prefix=(name.trim().split(' ').map(function(w){return w[0]||'';}).join('')).toUpperCase().slice(0,2);
+  var num=Math.floor(100+Math.random()*900);
+  return prefix+num;
+}
+function addPlayer(){
+  var inp=document.getElementById('np-name');
+  var name=inp.value.trim();
+  if(!name)return;
+  // Generate unique code
+  var code=genCode(name);
+  var existing=ST.participants.map(function(p){return p.code;});
+  while(existing.indexOf(code)>-1){code=genCode(name);}
+  var p={id:'p'+Date.now(),name:name,color:COLS[ST.participants.length%COLS.length],initials:ini(name),code:code};
+  ST.participants.push(p);
+  inp.value='';
+  saveToSheets().then(function(){
+    renderAll();
+    // Show code to admin so they can share with player
+    alert('Player added!\n\nName: '+name+'\nLogin code: '+code+'\n\nShare this code with '+name.split(' ')[0]+' on WhatsApp. They will use it to login.');
+  });
+}
 
 function removePlayer(id){if(!confirm('Remove this player?'))return;ST.participants=ST.participants.filter(function(p){return p.id!==id;});saveToSheets().then(function(){renderAll();});}
 
 function openBetModal(matchId){
   var m=null;for(var i=0;i<MATCHES.length;i++){if(MATCHES[i].id===matchId){m=MATCHES[i];break;}}if(!m)return;
+
+  // If no one is logged in and not admin, prompt to login first
+  if(!loggedInPlayer && !isAdmin){
+    alert('Please login with your player code first.\n\nGo to the Players tab and enter your code.');
+    switchTab('players');
+    return;
+  }
+
   activeBetMatch=m;selTeamIdx=null;betAmount=10;
   document.getElementById('bm-title').textContent=m.t1+' vs '+m.t2;
-  document.getElementById('bm-sub').textContent='Match '+m.id+' \u00B7 '+m.day+' '+fmtDate(m.date)+' \u00B7 '+m.time;
-  var sel=document.getElementById('bm-player');sel.innerHTML='';
-  for(var i=0;i<ST.participants.length;i++){var opt=document.createElement('option');opt.value=ST.participants[i].id;opt.textContent=ST.participants[i].name;sel.appendChild(opt);}
+  document.getElementById('bm-sub').textContent='Match '+m.id+' · '+m.day+' '+fmtDate(m.date)+' · '+m.time;
+
+  // Show/hide player section based on who is opening
+  var playerSection=document.getElementById('bm-player-section');
+  var adminSection=document.getElementById('bm-admin-section');
+  if(isAdmin){
+    playerSection.style.display='none';
+    adminSection.style.display='block';
+    var sel=document.getElementById('bm-player-admin');sel.innerHTML='';
+    for(var i=0;i<ST.participants.length;i++){var opt=document.createElement('option');opt.value=ST.participants[i].id;opt.textContent=ST.participants[i].name;sel.appendChild(opt);}
+  } else {
+    playerSection.style.display='block';
+    adminSection.style.display='none';
+    document.getElementById('bm-player-display').textContent=loggedInPlayer.name;
+  }
+
+  document.getElementById('bm-player-err').textContent='';
   document.getElementById('bm-t1n').textContent=m.t1;document.getElementById('bm-t1f').textContent=TF[m.t1]||'';
   document.getElementById('bm-t2n').textContent=m.t2;document.getElementById('bm-t2f').textContent=TF[m.t2]||'';
   document.getElementById('bm-t1').className='tp';document.getElementById('bm-t2').className='tp';
-  document.getElementById('bm-amt').textContent='\u20B910';
+  document.getElementById('bm-amt').textContent='₹10';
   document.getElementById('bet-modal').classList.add('open');
 }
 function closeBetModal(){document.getElementById('bet-modal').classList.remove('open');activeBetMatch=null;}
 function selTeam(i){selTeamIdx=i;document.getElementById('bm-t1').className='tp'+(i===0?' sel':'');document.getElementById('bm-t2').className='tp'+(i===1?' sel':'');}
 function chgAmt(d){betAmount=Math.max(10,betAmount+d);document.getElementById('bm-amt').textContent='\u20B9'+betAmount;}
 function submitBet(){
-  if(selTeamIdx===null){alert('Please pick a team!');return;}
-  var team=selTeamIdx===0?activeBetMatch.t1:activeBetMatch.t2;
-  var pid=document.getElementById('bm-player').value;
+  var errEl=document.getElementById('bm-player-err');
+  errEl.textContent='';
+  if(selTeamIdx===null){errEl.textContent='Please pick a team.';return;}
+
+  var pid='';
+  if(isAdmin){
+    // Admin uses dropdown
+    pid=document.getElementById('bm-player-admin').value;
+  } else {
+    // Logged-in player — use their own ID
+    if(!loggedInPlayer){errEl.textContent='Please login first.';return;}
+    pid=loggedInPlayer.id;
+  }
+
+  // Check duplicate bet
+  if(ST.bets[activeBetMatch.id]&&ST.bets[activeBetMatch.id][pid]){
+    errEl.textContent='This player already placed a bet for this match!';return;
+  }
+
   if(!ST.bets[activeBetMatch.id])ST.bets[activeBetMatch.id]={};
-  ST.bets[activeBetMatch.id][pid]={team:team,amount:betAmount};
-  closeBetModal();saveToSheets().then(function(){renderAll();});
+  ST.bets[activeBetMatch.id][pid]={team:(selTeamIdx===0?activeBetMatch.t1:activeBetMatch.t2),amount:betAmount};
+  closeBetModal();
+  saveToSheets().then(function(){renderAll();});
 }
 
 function openResultModal(matchId){
@@ -650,6 +783,36 @@ function submitResult(){
     if(nobets.length)msg+='\u23F0 No Bet:\n'+nobets.join('\n');
     setTimeout(function(){alert(msg);},300);
   });
+}
+
+function getCodesHtml(){
+  if(!ST.participants.length)return '<div style="font-size:12px;color:var(--text3)">No players yet.</div>';
+  var h='';
+  for(var i=0;i<ST.participants.length;i++){
+    var p=ST.participants[i];
+    var code=p.code||'<span style="color:var(--gold2)">no code - click button below</span>';
+    h+='<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">';
+    h+='<div class="ava" style="background:'+p.color+'22;color:'+p.color+';width:28px;height:28px;font-size:11px">'+p.initials+'</div>';
+    h+='<div style="flex:1;font-size:13px;color:var(--text)">'+p.name+'</div>';
+    h+='<div style="font-family:monospace;font-size:13px;color:var(--teal);background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:2px 8px">'+code+'</div>';
+    h+='</div>';
+  }
+  return h;
+}
+
+function generateMissingCodes(){
+  var changed=false;
+  for(var i=0;i<ST.participants.length;i++){
+    if(!ST.participants[i].code){
+      var code=genCode(ST.participants[i].name);
+      var existing=ST.participants.map(function(p){return p.code;});
+      while(existing.indexOf(code)>-1){code=genCode(ST.participants[i].name);}
+      ST.participants[i].code=code;
+      changed=true;
+    }
+  }
+  if(!changed){alert('All players already have login codes.');return;}
+  saveToSheets().then(function(){renderAdmin();alert('Codes generated! Share them with players from the codes list above.');});
 }
 
 function exportData(){var a=document.createElement('a');a.href='data:text/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(ST,null,2));a.download='nutrabay_ipl2026_backup.json';a.click();}
