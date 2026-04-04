@@ -277,6 +277,24 @@ select.inp{cursor:pointer}
   </div>
 </div>
 
+<!-- SHOOTOUT MODAL -->
+<div class="mbg" id="shootout-modal">
+  <div class="modal" style="max-width:420px">
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:36px;margin-bottom:8px">&#127881;</div>
+      <div class="mt" id="sm-title">Match Result</div>
+      <div style="font-size:13px;color:var(--teal);font-weight:600;margin-top:4px" id="sm-winner"></div>
+    </div>
+    <div id="sm-body" style="margin-bottom:20px"></div>
+    <div style="display:flex;gap:8px;flex-direction:column">
+      <a id="sm-wa-btn" href="#" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.35);border-radius:var(--rs);padding:12px;font-size:14px;font-weight:600;color:#4ade80;text-decoration:none">
+        &#128172; Share Result on WhatsApp
+      </a>
+      <button class="btn bo" onclick="closeShootoutModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
 var ADMIN_PIN = '2611';
 var SCRIPT_URL = '';
@@ -905,16 +923,70 @@ function submitResult(){
   if(selWinnerIdx===null){alert('Please select the winning team!');return;}
   var m=activeResultMatch;var winner=selWinnerIdx===0?m.t1:m.t2;
   ST.results[m.id]=winner;closeResultModal();
-  saveToSheets().then(function(){
-    renderAll();
-    var mb=ST.bets[m.id]||{};var wins=[],losses=[],nobets=[];
-    for(var i=0;i<ST.participants.length;i++){var p=ST.participants[i];var b=mb[p.id];if(!b)nobets.push(p.name+' (-\u20B910)');else if(b.team===winner)wins.push(p.name+' (+\u20B9'+b.amount+')');else losses.push(p.name+' (-\u20B9'+b.amount+')');}
-    var msg='Match '+m.id+': '+m.t1+' vs '+m.t2+'\nWinner: '+winner+'\n\n';
-    if(wins.length)msg+='\u2705 Winners:\n'+wins.join('\n')+'\n\n';
-    if(losses.length)msg+='\u274C Lost:\n'+losses.join('\n')+'\n\n';
-    if(nobets.length)msg+='\u23F0 No Bet:\n'+nobets.join('\n');
-    setTimeout(function(){alert(msg);},300);
-  });
+  saveToSheets().then(function(){renderAll();showShootout(m,winner);});
+}
+
+function showShootout(m,winner){
+  var mb=ST.bets[m.id]||{};
+  var wins=[],losses=[],nobets=[];
+  for(var i=0;i<ST.participants.length;i++){
+    var p=ST.participants[i];var b=mb[p.id];
+    var mTime=parseMatchTime(m);var hadChance=true;
+    if(mTime&&p.joinedTs){var cutoff=new Date(mTime.getTime()-30*60*1000);hadChance=(p.joinedTs<=cutoff.getTime());}
+    else if(p.joined&&m.date<p.joined){hadChance=false;}
+    if(!hadChance)continue;
+    if(!b)nobets.push(p.name);
+    else if(b.team===winner)wins.push({name:p.name,amt:b.amount});
+    else losses.push({name:p.name,amt:b.amount});
+  }
+
+  // Build modal body
+  var bh='';
+  if(wins.length){
+    bh+='<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:600;color:var(--green2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">&#127942; Winners</div>';
+    for(var i=0;i<wins.length;i++)bh+='<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text)">'+wins[i].name+'</span><span style="color:var(--green2);font-weight:600">+₹'+wins[i].amt+'</span></div>';
+    bh+='</div>';
+  }
+  if(losses.length){
+    bh+='<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:600;color:var(--red2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">&#10007; Lost</div>';
+    for(var i=0;i<losses.length;i++)bh+='<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text)">'+losses[i].name+'</span><span style="color:var(--red2);font-weight:600">-₹'+losses[i].amt+'</span></div>';
+    bh+='</div>';
+  }
+  if(nobets.length){
+    bh+='<div><div style="font-size:11px;font-weight:600;color:var(--gold2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">&#128274; No Bet (-₹10)</div>';
+    for(var i=0;i<nobets.length;i++)bh+='<div style="padding:5px 0;border-bottom:1px solid var(--border);color:var(--text2)">'+nobets[i]+'</div>';
+    bh+='</div>';
+  }
+  if(!bh)bh='<div style="text-align:center;color:var(--text3);padding:20px">No bets for this match.</div>';
+
+  // Build WhatsApp text using plain ASCII-safe characters
+  var nl='\n';
+  var wa='IPL 2026 - Match '+m.id+' Result'+nl;
+  wa+=m.t1+' vs '+m.t2+nl;
+  wa+='Winner: '+winner+nl+nl;
+  if(wins.length){
+    wa+='Winners:'+nl;
+    for(var i=0;i<wins.length;i++)wa+=wins[i].name+' (+Rs'+wins[i].amt+')'+nl;
+    wa+=nl;
+  }
+  if(losses.length){
+    wa+='Lost:'+nl;
+    for(var i=0;i<losses.length;i++)wa+=losses[i].name+' (-Rs'+losses[i].amt+')'+nl;
+    wa+=nl;
+  }
+  if(nobets.length){wa+='No Bet (-Rs10): '+nobets.join(', ')+nl+nl;}
+  wa+='Leaderboard: '+window.location.href;
+
+  document.getElementById('sm-title').textContent='Match '+m.id+': '+m.t1+' vs '+m.t2;
+  document.getElementById('sm-winner').textContent=winner+' won!';
+  document.getElementById('sm-body').innerHTML=bh;
+  var waUrl='https://wa.me/?text='+encodeURIComponent(wa);
+  document.getElementById('sm-wa-btn').href=waUrl;
+  document.getElementById('shootout-modal').classList.add('open');
+}
+
+function closeShootoutModal(){
+  document.getElementById('shootout-modal').classList.remove('open');
 }
 
 function getCodesHtml(){
