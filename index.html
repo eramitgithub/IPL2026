@@ -133,6 +133,8 @@ select.inp{cursor:pointer}
 .ft strong{color:var(--text)}
 .cpill{background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:1px 6px;font-size:11px;color:var(--teal);font-family:monospace}
 @media(max-width:480px){.sg{gap:8px}.sv{font-size:22px}.tn{font-size:17px}.modal{padding:20px 16px}}
+.join-box{background:linear-gradient(135deg,rgba(0,194,184,0.07) 0%,rgba(0,194,184,0.02) 100%);border:1px solid rgba(0,194,184,0.25);border-radius:var(--r);padding:16px;margin-bottom:14px;}
+
 </style>
 </head>
 <body>
@@ -267,7 +269,7 @@ select.inp{cursor:pointer}
 </div>
 
 <script>
-var ADMIN_PIN = '2611';
+var ADMIN_PIN = '2@26';
 var SCRIPT_URL = '';
 var TC = {RCB:'#dc2626',CSK:'#d97706',MI:'#2563eb',KKR:'#7c3aed',RR:'#db2777',GT:'#059669',DC:'#0ea5e9',SRH:'#ea580c',LSG:'#65a30d',PBKS:'#e11d48'};
 var TF = {RCB:'Royal Challengers Bengaluru',CSK:'Chennai Super Kings',MI:'Mumbai Indians',KKR:'Kolkata Knight Riders',RR:'Rajasthan Royals',GT:'Gujarat Titans',DC:'Delhi Capitals',SRH:'Sunrisers Hyderabad',LSG:'Lucknow Super Giants',PBKS:'Punjab Kings'};
@@ -386,7 +388,16 @@ function setSyncMsg(m){document.getElementById('smsg').textContent=m;document.ge
 function setSyncOk(m){document.getElementById('smsg').textContent=m;document.getElementById('sbar').className='sbar ok';document.getElementById('sdot').className='dot';}
 function setSyncErr(m){document.getElementById('smsg').textContent=m;document.getElementById('sbar').className='sbar err';document.getElementById('sdot').className='dot';}
 
-function loadFromSheets() {
+var lastFetchTime = 0;
+var CACHE_TTL = 300000; // 5 min cache — reduces API calls for large groups
+
+function loadFromSheets(force) {
+  var now = Date.now();
+  // Use cached data if fresh enough and not a forced sync
+  if(!force && lastFetchTime > 0 && (now - lastFetchTime) < CACHE_TTL) {
+    setSyncOk('Cached ' + new Date(lastFetchTime).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
+    return Promise.resolve();
+  }
   setSyncMsg('Syncing with Google Sheets...');
   return gsFetch().then(function(res){
     if(res.error)throw new Error(res.error);
@@ -394,17 +405,18 @@ function loadFromSheets() {
     ST.participants=d.participants||[];
     ST.bets=d.bets||{};
     ST.results=d.results||{};
+    lastFetchTime = Date.now();
     setSyncOk('Synced '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
   }).catch(function(e){setSyncErr('Sync failed: '+e.message);});
 }
 
 function saveToSheets() {
   return gsPost({action:'writeAll',data:{participants:ST.participants,bets:ST.bets,results:ST.results}})
-    .then(function(res){if(res.error)throw new Error(res.error);setSyncOk('Saved '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));})
+    .then(function(res){if(res.error)throw new Error(res.error);lastFetchTime=0;setSyncOk('Saved '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));})
     .catch(function(e){setSyncErr('Save failed: '+e.message);});
 }
 
-function syncNow(){loadFromSheets().then(function(){renderAll();});}
+function syncNow(){lastFetchTime=0;loadFromSheets(true).then(function(){renderAll();});}
 
 function saveSetup(){
   var url=document.getElementById('su-url').value.trim();
@@ -415,7 +427,7 @@ function saveSetup(){
 }
 
 function startApp(){
-  loadFromSheets().then(function(){renderAll();setInterval(function(){loadFromSheets().then(function(){renderAll();});},30000);});
+  loadFromSheets().then(function(){renderAll();setInterval(function(){loadFromSheets().then(function(){renderAll();});},300000);});
 }
 
 function requireAdmin(cb){if(isAdmin){cb();return;} pinBuf='';pinCb=cb;document.getElementById('perr').textContent='';updateDots();document.getElementById('pmod').classList.add('open');}
@@ -439,7 +451,7 @@ function renderMatches(){
   for(var i=0;i<MATCHES.length;i++){if(MATCHES[i].date===td)todays.push(MATCHES[i]);else if(MATCHES[i].date>td)upcoming.push(MATCHES[i]);else past.push(MATCHES[i]);}
   upcoming=upcoming.slice(0,15); past=past.reverse().slice(0,12);
   var h='';
-  if(todays.length){h+='<div class="notif">&#128276; Match day! Collect bets before 7 PM IST</div><div class="sh">Today</div>';for(var i=0;i<todays.length;i++)h+=matchCard(todays[i]);}
+  if(todays.length){h+='<div class="notif">&#128276; Match day! Bets close at 3:20 PM IST</div><div class="sh">Today</div>';for(var i=0;i<todays.length;i++)h+=matchCard(todays[i]);}
   if(upcoming.length){h+='<div class="sh">Upcoming</div>';for(var i=0;i<upcoming.length;i++)h+=matchCard(upcoming[i]);}
   if(past.length){h+='<div class="sh">Recent results</div>';for(var i=0;i<past.length;i++)h+=matchCard(past[i]);}
   if(!h)h='<div class="empty">No matches to show</div>';
@@ -509,12 +521,38 @@ function renderLeaderboard(){
 
 function renderPlayers(){
   var el=document.getElementById('tab-players'); var lb=getLeaderboard(); var h='';
-  if(!isAdmin){
-    h+='<div class="lno">&#128274; <div><div style="font-weight:500;color:var(--text)">Admin only</div><div style="font-size:12px;margin-top:2px">Adding and removing players requires admin access.</div></div><button class="btn bg bsm" style="margin-left:auto;white-space:nowrap" onclick="requireAdmin(function(){renderPlayers();})">Unlock</button></div>';
+
+  if(isAdmin){
+    // Admin view: add + remove players
+    h+='<div class="join-box">';
+    h+='<div style="font-size:11px;color:var(--teal);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Add player</div>';
+    h+='<div style="display:flex;gap:8px">';
+    h+='<input class="inp" id="np-name" placeholder="Enter player name" style="flex:1">';
+    h+='<button class="btn bp2" onclick="addPlayer()">+ Add</button>';
+    h+='</div>';
+    h+='</div>';
+    h+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px">';
+    h+='<span style="font-size:11px;color:var(--teal);background:rgba(0,194,184,0.08);border:1px solid rgba(0,194,184,0.2);border-radius:20px;padding:3px 10px">&#128273; Admin mode</span>';
+    h+='</div>';
   } else {
-    h+='<div style="display:flex;gap:8px;margin-bottom:16px"><input class="inp" id="np-name" placeholder="Enter player name" style="flex:1"><button class="btn bp2" onclick="addPlayer()">+ Add</button></div>';
+    // Non-admin view: info box + unlock button
+    h+='<div class="join-box">';
+    h+='<div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px">Want to join the pool?</div>';
+    h+='<div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px">';
+    h+='Players are added by <strong style="color:var(--teal)">Amit Yadav</strong> or <strong style="color:var(--teal)">Amit Parihar</strong>.<br>';
+    h+='Send either of them a message on WhatsApp with your name and they will add you to the pool.';
+    h+='</div>';
+    h+='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">';
+    h+='<a href="https://wa.me/91XXXXXXXXXX" target="_blank" class="btn bp2 bsm">&#128172; Message Amit Yadav</a>';
+    h+='<a href="https://wa.me/91XXXXXXXXXX" target="_blank" class="btn bo bsm">&#128172; Message Amit Parihar</a>';
+    h+='</div>';
+    h+='</div>';
+    h+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px">';
+    h+='<button class="btn bo bsm" onclick="requireAdmin(function(){renderPlayers();})">&#128273; Admin login</button>';
+    h+='</div>';
   }
-  if(!ST.participants.length){h+='<div class="empty">No players yet. Admin can add players.</div>';el.innerHTML=h;return;}
+
+  if(!ST.participants.length){h+='<div class="empty">No players yet.</div>';el.innerHTML=h;return;}
   h+='<div class="card" style="padding:12px 16px">';
   for(var i=0;i<ST.participants.length;i++){
     var p=ST.participants[i]; var s=null;
@@ -552,10 +590,11 @@ function renderAdmin(){
       '&#128196; All data lives in Google Sheet &rarr; open anytime to audit or fix a mistake'+
     '</div>'+
   '</div>'+
-  '<div style="text-align:center;padding:20px;font-size:11px;color:var(--text3)">Nutrabay IPL 2026 \u00B7 For fun only \u00B7 Admin PIN: 2026</div>';
+  '<div style="text-align:center;padding:20px;font-size:11px;color:var(--text3)">Nutrabay IPL 2026 \u00B7 For fun only</div>';
 }
 
 function addPlayer(){var inp=document.getElementById('np-name');var name=inp.value.trim();if(!name)return;ST.participants.push({id:'p'+Date.now(),name:name,color:COLS[ST.participants.length%COLS.length],initials:ini(name)});inp.value='';saveToSheets().then(function(){renderAll();});}
+
 function removePlayer(id){if(!confirm('Remove this player?'))return;ST.participants=ST.participants.filter(function(p){return p.id!==id;});saveToSheets().then(function(){renderAll();});}
 
 function openBetModal(matchId){
