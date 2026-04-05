@@ -456,7 +456,7 @@ function getLeaderboard(){
             hadChance=true;
           }
         }
-        if(hadChance){sc[pp.id].net-=10;sc[pp.id].nobets++;sc[pp.id].losses++;}
+        if(hadChance){sc[pp.id].net-=10;sc[pp.id].nobets++;}
       }
       else if(bet.team===winner){sc[pp.id].net+=bet.amount;sc[pp.id].wins++;}
       else{sc[pp.id].net-=bet.amount;sc[pp.id].losses++;}
