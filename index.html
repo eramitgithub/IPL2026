@@ -440,16 +440,21 @@ function getLeaderboard(){
       // Skip no-bet penalty if player joined after match start time
       var bet=mb[pp.id];
       if(!bet){
-        // Only penalize if player had a chance to bet:
-        // They must have joined before the bet cutoff (match start - 30 min)
-        var mTime=parseMatchTime(m);
+        // Penalize only if player had a chance to bet
         var hadChance=false;
-        if(mTime&&pp.joinedTs){
-          var cutoff=new Date(mTime.getTime()-30*60*1000);
-          hadChance=(pp.joinedTs<=cutoff.getTime());
-        } else if(!pp.joinedTs){
-          // Old player with no joinedTs — only penalize if different day (joined before match day)
-          hadChance=(m.date>joinedDate);
+        if(m.date>joinedDate){
+          // Match on a different day AFTER join date: always had chance
+          hadChance=true;
+        } else if(m.date===joinedDate){
+          // Match on same day as joining: check exact join time vs bet cutoff
+          var mTime=parseMatchTime(m);
+          if(mTime&&pp.joinedTs){
+            var cutoff=new Date(mTime.getTime()-30*60*1000);
+            hadChance=(pp.joinedTs<=cutoff.getTime());
+          } else {
+            // No exact timestamp — give benefit of doubt, penalize
+            hadChance=true;
+          }
         }
         if(hadChance){sc[pp.id].net-=10;sc[pp.id].nobets++;sc[pp.id].losses++;}
       }
@@ -499,14 +504,14 @@ function saveSetup(){
 function startApp(){
   var savedCode=localStorage.getItem('ipl_player_code');
   loadFromSheets().then(function(){
-    // Backfill joined date and joinedTs for players added before this update
+    // Backfill joined date for players added before this update
+    // Use season start date so all matches count for them
+    var SEASON_START='2026-03-28';
     var needsSave=false;
     for(var i=0;i<ST.participants.length;i++){
       if(!ST.participants[i].joined){
-        ST.participants[i].joined=todayStr();
-        // Set joinedTs to start of today so they are NOT penalized for today's matches
-        // (since we don't know exactly when they were added)
-        ST.participants[i].joinedTs=new Date(todayStr()+'T00:00:00').getTime();
+        ST.participants[i].joined=SEASON_START;
+        ST.participants[i].joinedTs=new Date(SEASON_START+'T00:00:00').getTime();
         needsSave=true;
       }
     }
