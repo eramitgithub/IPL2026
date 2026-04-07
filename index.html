@@ -270,10 +270,12 @@ select.inp{cursor:pointer}
       <div>&#10007; <strong style="color:var(--red2)">Lose</strong> &rarr; bet amount <strong>deducted</strong></div>
       <div>&#128274; <strong style="color:var(--gold2)">No Bet</strong> &rarr; &#8377;10 auto-deducted</div>
     </div>
-    <div style="display:flex;gap:8px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn bp2" style="flex:1" onclick="submitResult()">Declare Winner</button>
-      <button class="btn bo" onclick="closeResultModal()">Cancel</button>
+      <button class="btn bo bsm" onclick="submitNoResult()" style="color:var(--gold2);border-color:rgba(245,166,35,0.3)">No Result</button>
+      <button class="btn bo bsm" onclick="closeResultModal()">Cancel</button>
     </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:10px">Use No Result for draws, abandonments or cancelled matches. All bets are nullified.</div>
   </div>
 </div>
 
@@ -424,14 +426,15 @@ function betCutoffStr(m){
   var dispAMPM=ch>=12?'PM':'AM';
   return dispH+':'+(cm<10?'0':'')+cm+' '+dispAMPM;
 }
-function getStatus(m){var t=todayStr();if(ST.results[m.id])return 'done';if(m.date===t)return 'live';if(m.date<t)return 'pending';return 'upcoming';}
+function getStatus(m){var t=todayStr();if(ST.results[m.id]==='NR')return 'nr';if(ST.results[m.id])return 'done';if(m.date===t)return 'live';if(m.date<t)return 'pending';return 'upcoming';}
 
 function getLeaderboard(){
   var sc={};
   for(var i=0;i<ST.participants.length;i++){var p=ST.participants[i];sc[p.id]={id:p.id,name:p.name,color:p.color,initials:p.initials,wins:0,losses:0,nobets:0,net:0,joined:p.joined||'2026-01-01'};}
   for(var mi=0;mi<MATCHES.length;mi++){
     var m=MATCHES[mi];if(!ST.results[m.id])continue;
-    var winner=ST.results[m.id];var mb=ST.bets[m.id]||{};
+    var winner=ST.results[m.id];if(winner==='NR')continue; // No Result - skip entirely
+    var mb=ST.bets[m.id]||{};
     for(var pi=0;pi<ST.participants.length;pi++){
       var pp=ST.participants[pi];if(!sc[pp.id])continue;
       // Skip matches that happened before the player joined
@@ -564,6 +567,7 @@ function matchCard(m){
   var result=ST.results[m.id];var t1c=TC[m.t1]||'#888';var t2c=TC[m.t2]||'#888';
   var badge='';
   if(st==='live')badge='<span class="badge bl"><span class="dot pulse" style="background:var(--red2)"></span> Live</span>';
+  else if(st==='nr')badge='<span class="badge" style="background:rgba(245,166,35,0.08);color:var(--gold2);border:1px solid rgba(245,166,35,0.2)">&#9135; No Result</span>';
   else if(st==='done')badge='<span class="badge bd">&#10003; Done</span>';
   else if(st==='pending')badge='<span class="badge bp">&#9203; Awaiting result</span>';
   else badge='<span class="badge bu">Upcoming</span>';
@@ -595,7 +599,7 @@ function matchCard(m){
     }
     chips+='</div>';
   }
-  var canResult=st==='pending'||(st==='live'&&isMatchStarted(m));
+  var canResult=(st==='pending'||(st==='live'&&isMatchStarted(m)))&&!ST.results[m.id];
   var betBtn='';
   if(st==='live'&&ST.participants.length>0){
     if(isMatchStarted(m)){betBtn='<span style="font-size:11px;color:var(--gold2);background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.2);border-radius:var(--rs);padding:5px 10px">&#127951; Started</span>';}
@@ -615,7 +619,7 @@ function matchCard(m){
       cutoffLine='<div style="font-size:11px;color:var(--red2);margin-top:4px">&#128274; Bets closed</div>';
     }
   }
-  return '<div class="mc '+(st==='live'?'today':'')+' '+(st==='done'?'done':'')+'">'+
+  return '<div class="mc '+(st==='live'?'today':'')+' '+((st==='done'||st==='nr')?'done':'')+'">'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'+
       '<div style="flex:1;min-width:0">'+
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">'+badge+'<span style="font-size:11px;color:var(--text3)">Match '+m.id+'</span>'+wBanner+'</div>'+
@@ -922,6 +926,20 @@ function openResultModal(matchId){
     document.getElementById('result-modal').classList.add('open');
   });
 }
+function submitNoResult(){
+  if(!confirm('Mark this match as No Result? All bets will be nullified and no one will be penalized.'))return;
+  var m=activeResultMatch;
+  // Store 'NR' as result to mark it as settled but no winner
+  ST.results[m.id]='NR';
+  // Remove all bets for this match so they don't count in pool
+  ST.bets[m.id]={};
+  closeResultModal();
+  saveToSheets().then(function(){
+    renderAll();
+    alert('Match '+m.id+' marked as No Result. All bets nullified. No impact on leaderboard or pool.');
+  });
+}
+
 function closeResultModal(){document.getElementById('result-modal').classList.remove('open');activeResultMatch=null;}
 function selWinner(i){selWinnerIdx=i;document.getElementById('rm-t1').className='tp'+(i===0?' sel':'');document.getElementById('rm-t2').className='tp'+(i===1?' sel':'');}
 function submitResult(){
