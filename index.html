@@ -575,7 +575,9 @@ function matchCard(m){
   if(ST.participants.length>0&&(st!=='upcoming'||bpids.length>0)){
     chips='<div class="bc">';
     for(var i=0;i<ST.participants.length;i++){
-      var p=ST.participants[i];var b=mb[p.id];var fn=p.name.split(' ')[0];
+      var p=ST.participants[i];var b=mb[p.id];
+      var nameParts=p.name.trim().split(' ');
+      var fn=nameParts[0]+(nameParts[1]?' '+nameParts[1][0]:'');
       if(b){
         var won=result&&b.team===result;var lost=result&&b.team!==result;
         var cls=won?'chip cw':(lost?'chip cl':'chip cb');
