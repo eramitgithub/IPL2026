@@ -244,10 +244,13 @@ select.inp{cursor:pointer}
     <div class="lbl">Bet amount</div>
     <div class="ar">
       <button class="ab" onclick="chgAmt(-10)">&#8722;</button>
-      <div class="av" id="bm-amt">&#8377;10</div>
+      <input type="number" id="bm-amt-input" min="10" step="10" value="10"
+        style="flex:1;text-align:center;font-family:'Rajdhani',sans-serif;font-size:26px;font-weight:700;color:var(--teal);background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rs);padding:6px 10px;"
+        oninput="onAmtInput(this)">
       <button class="ab" onclick="chgAmt(10)">+</button>
     </div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:20px">Minimum &#8377;10 &middot; multiples of &#8377;10</div>
+    <div id="bm-amt-err" style="font-size:11px;color:var(--red2);min-height:16px;margin-bottom:4px"></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">Minimum &#8377;10 &middot; multiples of &#8377;10</div>
     <div style="display:flex;gap:8px">
       <button class="btn bp2" style="flex:1" id="bm-confirm-btn" onclick="submitBet()">Confirm Bet</button>
       <button class="btn bo" onclick="closeBetModal()">Cancel</button>
@@ -672,7 +675,9 @@ function adminEditBet(matchId, pid){
     document.getElementById('bm-t1').className='tp';
     document.getElementById('bm-t2').className='tp';
   }
-  document.getElementById('bm-amt').textContent='\u20B9'+betAmount;
+  var amtInp2=document.getElementById('bm-amt-input');
+  if(amtInp2)amtInp2.value=betAmount;
+  document.getElementById('bm-amt-err').textContent='';
   document.getElementById('bet-modal').classList.add('open');
 }
 
@@ -889,15 +894,45 @@ function openBetModal(matchId, editPid){
   } else {
     document.getElementById('bm-t1').className='tp';document.getElementById('bm-t2').className='tp';
   }
-  document.getElementById('bm-amt').textContent='\u20B9'+betAmount;
+  var amtInp2=document.getElementById('bm-amt-input');
+  if(amtInp2)amtInp2.value=betAmount;
+  document.getElementById('bm-amt-err').textContent='';
   document.getElementById('bet-modal').classList.add('open');
 }
 function closeBetModal(){document.getElementById('bet-modal').classList.remove('open');activeBetMatch=null;activeBetEditPid=null;document.getElementById('bm-player-admin').disabled=false;}
 function selTeam(i){selTeamIdx=i;document.getElementById('bm-t1').className='tp'+(i===0?' sel':'');document.getElementById('bm-t2').className='tp'+(i===1?' sel':'');}
-function chgAmt(d){betAmount=Math.max(10,betAmount+d);document.getElementById('bm-amt').textContent='\u20B9'+betAmount;}
+function chgAmt(d){
+  betAmount=Math.max(10,betAmount+d);
+  var inp=document.getElementById('bm-amt-input');
+  if(inp)inp.value=betAmount;
+  document.getElementById('bm-amt-err').textContent='';
+}
+function onAmtInput(el){
+  var raw=parseInt(el.value)||0;
+  document.getElementById('bm-amt-err').textContent='';
+  if(raw<10){
+    document.getElementById('bm-amt-err').textContent='Minimum bet is ₹10.';
+    betAmount=10;
+  } else if(raw%10!==0){
+    document.getElementById('bm-amt-err').textContent='Amount must be a multiple of ₹10.';
+    betAmount=raw; // keep raw so user can continue typing
+  } else {
+    betAmount=raw;
+  }
+}
 
 function submitBet(){
   var errEl=document.getElementById('bm-player-err');errEl.textContent='';
+  // Validate amount from input field
+  var amtInp=document.getElementById('bm-amt-input');
+  if(amtInp){
+    var rawAmt=parseInt(amtInp.value)||0;
+    var amtErr=document.getElementById('bm-amt-err');
+    if(rawAmt<10){amtErr.textContent='Minimum bet is ₹10.';return;}
+    if(rawAmt%10!==0){amtErr.textContent='Amount must be a multiple of ₹10.';return;}
+    betAmount=rawAmt;
+    amtErr.textContent='';
+  }
   if(selTeamIdx===null){errEl.textContent='Please pick a team.';return;}
   var pid='';
   if(isAdmin){pid=document.getElementById('bm-player-admin').value;}
