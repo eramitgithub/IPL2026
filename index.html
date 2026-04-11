@@ -300,6 +300,16 @@ select.inp{cursor:pointer}
   </div>
 </div>
 
+<!-- DISCLAIMER MODAL -->
+<div class="mbg" id="disclaimer-modal" style="z-index:400">
+  <div class="modal" style="max-width:360px;text-align:center">
+    <div style="font-size:36px;margin-bottom:12px">&#9888;&#65039;</div>
+    <div style="font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--gold);margin-bottom:12px">Play Responsibly</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.8;margin-bottom:24px">This game involves financial risk and is intended for <strong style="color:var(--text)">fun and entertainment purposes only</strong>. Do not spend more than you can afford to lose.</div>
+    <button class="btn bp2" style="width:100%;padding:12px;font-size:14px" onclick="acceptDisclaimer()">I Understand, Let me Play</button>
+  </div>
+</div>
+
 <script>
 var ADMIN_PIN = '2611';
 var SCRIPT_URL = '';
@@ -507,6 +517,17 @@ function saveSetup(){
   document.getElementById('setup-screen').classList.remove('open');startApp();
 }
 
+var pendingBetMatchId = null;
+
+function acceptDisclaimer(){
+  document.getElementById('disclaimer-modal').classList.remove('open');
+  if(pendingBetMatchId!==null){
+    var mid=pendingBetMatchId;
+    pendingBetMatchId=null;
+    openBetModal(mid, null);
+  }
+}
+
 function startApp(){
   var savedCode=localStorage.getItem('ipl_player_code');
   loadFromSheets().then(function(){
@@ -608,7 +629,7 @@ function matchCard(m){
   var betBtn='';
   if(st==='live'&&ST.participants.length>0){
     if(isMatchStarted(m)){betBtn='<span style="font-size:11px;color:var(--gold2);background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.2);border-radius:var(--rs);padding:5px 10px">&#127951; Started</span>';}
-    else if(isBetOpen(m)){betBtn='<button class="btn bgold bsm" onclick="openBetModal('+m.id+', null)">+ Bet</button>';}
+    else if(isBetOpen(m)){betBtn='<button class="btn bgold bsm" onclick="showDisclaimer('+m.id+')">+ Bet</button>';}
   }
   var resBtn=canResult?(isAdmin?'<button class="btn bo bsm" onclick="openResultModal('+m.id+')">Result</button>':'<span style="font-size:18px;color:var(--text3);padding:4px" title="Admin only">&#128274;</span>'):'';
   var wBanner=result?'<div class="wb">&#127942; '+result+' won</div>':'';
@@ -856,6 +877,11 @@ function addPlayer(){
 }
 function removePlayer(id){if(!confirm('Remove this player?'))return;ST.participants=ST.participants.filter(function(p){return p.id!==id;});saveToSheets().then(function(){renderAll();});}
 
+function showDisclaimer(matchId){
+  pendingBetMatchId=matchId;
+  document.getElementById('disclaimer-modal').classList.add('open');
+}
+
 function openBetModal(matchId, editPid){
   var m=null;for(var i=0;i<MATCHES.length;i++){if(MATCHES[i].id===matchId){m=MATCHES[i];break;}}if(!m)return;
   if(!loggedInPlayer&&!isAdmin){alert('Please login with your player code first.\n\nGo to the Players tab and enter your code.');switchTab('players');return;}
@@ -1102,7 +1128,11 @@ function switchTab(tab){
 }
 function renderTab(tab){if(tab==='matches')renderMatches();else if(tab==='leaderboard')renderLeaderboard();else if(tab==='players')renderPlayers();else if(tab==='admin')renderAdmin();}
 
-(function(){var url=localStorage.getItem('ipl_gs_url');if(url){SCRIPT_URL=url;startApp();}else{document.getElementById('setup-screen').classList.add('open');}})();
+(function(){
+  var url=localStorage.getItem('ipl_gs_url');
+  if(url){SCRIPT_URL=url;startApp();}
+  else{document.getElementById('setup-screen').classList.add('open');}
+})();
 </script>
 </body>
 </html>
