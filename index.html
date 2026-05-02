@@ -627,6 +627,20 @@ function matchCard(m){
         chips+='</span>';
       }
     }
+    // Admin: show orphaned bets (player removed but bet still in data)
+    if(isAdmin){
+      var knownIds=ST.participants.map(function(pp){return pp.id;});
+      for(var bi=0;bi<bpids.length;bi++){
+        var opid=bpids[bi];
+        if(knownIds.indexOf(opid)===-1&&mb[opid]){
+          var ob=mb[opid];
+          chips+='<span class="chip" style="background:rgba(239,68,68,0.08);color:var(--red2);border:1px solid rgba(239,68,68,0.3)">';
+          chips+='&#9888; [removed] → '+ob.team+' ₹'+ob.amount;
+          chips+='<button class="ebet-btn" data-action="del" data-mid="'+m.id+'" data-pid="'+opid+'" style="color:var(--red2)" title="Delete orphaned bet">&#10007;</button>';
+          chips+='</span>';
+        }
+      }
+    }
     chips+='</div>';
   }
   var canResult=(st==='pending'||(st==='live'&&isMatchStarted(m)))&&!ST.results[m.id];
