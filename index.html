@@ -314,6 +314,20 @@ select.inp{cursor:pointer}
   </div>
 </div>
 
+<!-- KIDNEY WARNING MODAL -->
+<div class="mbg" id="kidney-modal" style="z-index:500">
+  <div class="modal" style="max-width:360px;text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">&#129405;</div>
+    <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--red2);margin-bottom:12px">Kidney bhi bech di bhai...</div>
+    <div style="font-size:14px;color:var(--text2);line-height:1.9;margin-bottom:8px">....laga do....</div>
+    <div style="background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.25);border-radius:var(--rs);padding:14px 16px;margin-bottom:24px">
+      <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">&#128203; A note from the Accounts Department</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.8;font-style:italic">The next salary will be credited after adjusting the loss amount.</div>
+    </div>
+    <button class="btn bp2" style="width:100%;padding:12px;font-size:14px" onclick="closeKidneyModal()">Theek Hai, Risk Lena Hai &#128526;</button>
+  </div>
+</div>
+
 <script>
 var ADMIN_PIN = '4612';
 var SCRIPT_URL = '';
@@ -1011,10 +1025,7 @@ function onAmtInput(el){
     betAmount=raw;
   } else {
     betAmount=raw;
-    if(raw>=50){
-      errEl.style.color='var(--gold2)';
-      errEl.textContent='&#128514; Kidney bhi bech di bhai.... laga do....';
-    }
+    if(raw>=50){showKidneyWarning();}
   }
 }
 
@@ -1265,6 +1276,15 @@ function addLog(action, detail, isAdminRole){
   if(!ST.log)ST.log=[];
   ST.log.unshift(entry); // newest first
   if(ST.log.length>200)ST.log=ST.log.slice(0,200); // keep last 200 entries
+}
+
+var kidneyShownForAmount = 0;
+function showKidneyWarning(){
+  // Only show once per session per threshold crossing (avoid spam on every keystroke)
+  document.getElementById('kidney-modal').classList.add('open');
+}
+function closeKidneyModal(){
+  document.getElementById('kidney-modal').classList.remove('open');
 }
 
 function exportData(){
