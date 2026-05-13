@@ -715,8 +715,14 @@ function adminEditBet(matchId, pid){
     document.getElementById('bm-t2').className='tp';
   }
   var amtInp2=document.getElementById('bm-amt-input');
-  if(amtInp2)amtInp2.value=betAmount;
+  var noLim=isAdmin||isCurrentPlayerNegative();
+  if(amtInp2){amtInp2.value=betAmount;amtInp2.max=noLim?'':10000;}
   document.getElementById('bm-amt-err').textContent='';
+  var hintEl=document.getElementById('bm-amt-hint');
+  if(hintEl){
+    if(noLim){hintEl.innerHTML='Minimum ₹10 · multiples of ₹10 · <span style="color:var(--teal)">No upper limit</span>'+(isCurrentPlayerNegative()?' <span style="color:var(--red2)">(you are in negative)</span>':'');}
+    else{hintEl.textContent='Minimum ₹10 · multiples of ₹10 · Max ₹10,000';}
+  }
   document.getElementById('bet-modal').classList.add('open');
 }
 
@@ -962,8 +968,14 @@ function openBetModal(matchId, editPid){
     document.getElementById('bm-t1').className='tp';document.getElementById('bm-t2').className='tp';
   }
   var amtInp2=document.getElementById('bm-amt-input');
-  if(amtInp2)amtInp2.value=betAmount;
+  var noLim=isAdmin||isCurrentPlayerNegative();
+  if(amtInp2){amtInp2.value=betAmount;amtInp2.max=noLim?'':10000;}
   document.getElementById('bm-amt-err').textContent='';
+  var hintEl=document.getElementById('bm-amt-hint');
+  if(hintEl){
+    if(noLim){hintEl.innerHTML='Minimum ₹10 · multiples of ₹10 · <span style="color:var(--teal)">No upper limit</span>'+(isCurrentPlayerNegative()?' <span style="color:var(--red2)">(you are in negative)</span>':'');}
+    else{hintEl.textContent='Minimum ₹10 · multiples of ₹10 · Max ₹10,000';}
+  }
   document.getElementById('bet-modal').classList.add('open');
 }
 function closeBetModal(){document.getElementById('bet-modal').classList.remove('open');activeBetMatch=null;activeBetEditPid=null;document.getElementById('bm-player-admin').disabled=false;}
@@ -974,21 +986,35 @@ function chgAmt(d){
   if(inp)inp.value=betAmount;
   document.getElementById('bm-amt-err').textContent='';
 }
+function isCurrentPlayerNegative(){
+  if(isAdmin)return false;
+  if(!loggedInPlayer)return false;
+  var lb=getLeaderboard();
+  for(var i=0;i<lb.length;i++){if(lb[i].id===loggedInPlayer.id&&lb[i].net<0)return true;}
+  return false;
+}
+
 function onAmtInput(el){
   var raw=parseInt(el.value)||0;
-  document.getElementById('bm-amt-err').textContent='';
+  var errEl=document.getElementById('bm-amt-err');
+  errEl.textContent='';errEl.style.color='var(--red2)';
+  var noLimit=isAdmin||isCurrentPlayerNegative();
   if(raw<10){
-    document.getElementById('bm-amt-err').textContent='Minimum bet is ₹10.';
+    errEl.textContent='Minimum bet is ₹10.';
     betAmount=10;
-  } else if(raw>10000){
-    document.getElementById('bm-amt-err').textContent='Maximum bet is ₹10,000.';
+  } else if(!noLimit&&raw>10000){
+    errEl.textContent='Maximum bet is ₹10,000.';
     betAmount=10000;
     el.value=10000;
   } else if(raw%10!==0){
-    document.getElementById('bm-amt-err').textContent='Amount must be a multiple of ₹10.';
+    errEl.textContent='Amount must be a multiple of ₹10.';
     betAmount=raw;
   } else {
     betAmount=raw;
+    if(raw>=50){
+      errEl.style.color='var(--gold2)';
+      errEl.textContent='&#128514; Kidney bhi bech di bhai.... laga do....';
+    }
   }
 }
 
@@ -1000,7 +1026,7 @@ function submitBet(){
     var rawAmt=parseInt(amtInp.value)||0;
     var amtErr=document.getElementById('bm-amt-err');
     if(rawAmt<10){amtErr.textContent='Minimum bet is ₹10.';return;}
-    if(rawAmt>10000){amtErr.textContent='Maximum bet is ₹10,000.';return;}
+    if(!isAdmin&&!isCurrentPlayerNegative()&&rawAmt>10000){amtErr.textContent='Maximum bet is ₹10,000.';return;}
     if(rawAmt%10!==0){amtErr.textContent='Amount must be a multiple of ₹10.';return;}
     betAmount=rawAmt;
     amtErr.textContent='';
