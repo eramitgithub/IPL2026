@@ -407,8 +407,8 @@ var MATCHES = [
   {id:70,t1:'KKR',t2:'DC',date:'2026-05-24',day:'Sun',time:'7:30 PM',venue:'Eden Gardens, Kolkata'},
   {id:71,t1:'RCB',t2:'GT',date:'2026-05-26',day:'Tue',time:'7:30 PM',venue:'HPCA Stadium, Dharamsala'},
   {id:72,t1:'SRH',t2:'RR',date:'2026-05-27',day:'Wed',time:'7:30 PM',venue:'New International Cricket Stadium, New Chandigarh'},
-  {id:73,t1:'TBD',t2:'TBD',date:'2026-05-29',day:'Fri',time:'7:30 PM',venue:'New International Cricket Stadium, New Chandigarh'},
-  {id:74,t1:'TBD',t2:'TBD',date:'2026-05-31',day:'Sun',time:'7:30 PM',venue:'Narendra Modi Stadium, Ahmedabad'}
+  {id:73,t1:'GT',t2:'RR',date:'2026-05-29',day:'Fri',time:'7:30 PM',venue:'New International Cricket Stadium, New Chandigarh'},
+  {id:74,t1:'RCB',t2:'TBD',date:'2026-05-31',day:'Sun',time:'7:30 PM',venue:'Narendra Modi Stadium, Ahmedabad'}
 ];
 
 var ST = {participants:[],bets:{},results:{},config:{wa1:'',wa1name:'Amit Yadav',wa2:'',wa2name:'Amit Parihar'},log:[]};
@@ -684,7 +684,7 @@ function matchCard(m){
   return '<div class="mc '+(st==='live'?'today':'')+' '+((st==='done'||st==='nr')?'done':'')+'">'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'+
       '<div style="flex:1;min-width:0">'+
-        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">'+badge+'<span style="font-size:11px;color:var(--text3)">Match '+m.id+'</span>'+wBanner+'</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">'+badge+'<span style="font-size:11px;color:var(--text3)">'+(m.id===71?'&#127942; Qualifier 1':m.id===72?'&#9889; Eliminator':m.id===73?'&#127942; Qualifier 2':m.id===74?'&#127881; Final':'Match '+m.id)+'</span>'+wBanner+'</div>'+
         '<div class="tr"><span class="td" style="background:'+t1c+'"></span><span class="tn" style="color:'+t1c+'">'+m.t1+'</span><span class="vs">vs</span><span class="td" style="background:'+t2c+'"></span><span class="tn" style="color:'+t2c+'">'+m.t2+'</span></div>'+
         '<div class="mm">'+m.day+' \u00B7 '+fmtDate(m.date)+' \u00B7 '+m.time+'</div>'+
         '<div class="mv">'+m.venue+'</div>'+poolLine+cutoffLine+
@@ -1109,6 +1109,12 @@ function submitResult(){
   var m=activeResultMatch;var winner=selWinnerIdx===0?m.t1:m.t2;
   ST.results[m.id]=winner;
   addLog('Result declared (admin)','Match '+m.id+' ('+m.t1+' vs '+m.t2+'): Winner = '+winner,true);
+  // Auto-fill Final (match 74) t2 with winner of Qualifier 2 (match 73)
+  if(m.id===73){
+    for(var fi=0;fi<MATCHES.length;fi++){
+      if(MATCHES[fi].id===74){MATCHES[fi].t2=winner;break;}
+    }
+  }
   closeResultModal();
   saveToSheets().then(function(){renderAll();showShootout(m,winner);});
 }
